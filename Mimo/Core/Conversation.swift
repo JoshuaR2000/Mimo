@@ -23,6 +23,7 @@ final class Conversation {
     @ObservationIgnored private var brain: AssistantBrain
     @ObservationIgnored private var brainSignature = ""
     @ObservationIgnored private var turn: Task<Void, Never>?
+    @ObservationIgnored private var voiceTask: Task<Void, Never>?
 
     init(app: AppState) {
         self.app = app
@@ -87,6 +88,7 @@ final class Conversation {
     /// Stops talking immediately, e.g. when the user starts speaking.
     func interrupt() {
         turn?.cancel()
+        voiceTask?.cancel()
         voice.stop()
         app.controller.speaking = false
         isThinking = false
@@ -149,31 +151,52 @@ final class Conversation {
         controller.mood = reply.mood
         if let g = reply.gesture { controller.perform(g) }
 
-        var duration = Double(reply.text.count) * 0.045
-        var usingAudio = false
+        // Start downloading the voice right away, but don't wait for it: the caption
+        // starts immediately and the audio joins in as soon as it arrives.
+        voiceTask?.cancel()
         if speakAloud {
-            do {
-                let data = try await voice.synthesize(reply.text, voice: app.character.voice, style: app.character.voiceStyle, apiKey: app.apiKey)
-                guard !Task.isCancelled else { return }
-                duration = try voice.play(data)
-                usingAudio = true
-            } catch {
-                errorMessage = error.localizedDescription
+            let voice = voice, app = app
+            voiceTask = Task {
+                do {
+                    let data = try await voice.synthesize(reply.text, voice: app.character.voice, style: app.character.voiceStyle, apiKey: app.apiKey)
+                    guard !Task.isCancelled else { return }
+                    _ = try voice.play(data)
+                    controller.speaking = false // the real audio drives the mouth from here
+                } catch is CancellationError {
+                } catch {
+                    if !Task.isCancelled { self.errorMessage = error.localizedDescription }
+                }
             }
         }
 
-        // Reveal the caption in step with the voice (or at reading speed with no audio).
-        controller.speaking = !usingAudio
+        // Reveal the caption at about the pace people speak; the mouth flaps until audio takes over.
+        controller.speaking = true
         caption = ""
-        let step = max(0.012, min(0.06, duration / Double(max(1, reply.text.count))))
         for ch in reply.text {
             if Task.isCancelled { controller.speaking = false; return }
             caption.append(ch)
-            try? await Task.sleep(for: .seconds(step))
+            try? await Task.sleep(for: .seconds(0.05))
         }
+        await voiceTask?.value
         controller.speaking = false
-        if usingAudio { await voice.waitUntilFinished() }
+        await voice.waitUntilFinished()
         try? await Task.sleep(for: .seconds(2.5))
         if !Task.isCancelled { controller.mood = .neutral }
+    }
+
+    /// Lets the character speak up on its own, e.g. when a timer ends.
+    func announce(_ text: String, mood: Mood = .surprised, gesture: CharacterGesture? = .jump) {
+        let reply = AssistantReply(text: text, mood: mood, gesture: gesture)
+        let speak = app.voiceEnabled && app.hasAPIKey
+        // Never cut off a request that's still being answered: wait for it, then speak up.
+        guard isThinking || turn != nil, let current = turn else {
+            perform(reply, speakAloud: speak)
+            return
+        }
+        Task {
+            await current.value
+            if self.turn == current { self.perform(reply, speakAloud: speak) }
+            else { self.history.append(ChatLine(speaker: .assistant, text: text)) }
+        }
     }
 }

@@ -30,6 +30,9 @@ struct MainView: View {
         .sheet(isPresented: $showSettings, onDismiss: conversation.refreshBrain) { SettingsView(app: app, conversation: conversation) }
         .sheet(isPresented: $showHistory) { HistoryView(lines: conversation.history) }
         .onAppear {
+            NotificationRelay.shared.onDeliver = { [conversation] text in
+                conversation.announce("Time's up! \(text)")
+            }
             conversation.greet()
             if let q = pending.question { pending.question = nil; conversation.send(q) }
         }

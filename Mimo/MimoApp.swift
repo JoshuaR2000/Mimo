@@ -1,8 +1,13 @@
 import SwiftUI
+import UserNotifications
 
 @main
 struct MimoApp: App {
     @State private var app = AppState()
+
+    init() {
+        UNUserNotificationCenter.current().delegate = NotificationRelay.shared
+    }
 
     var body: some Scene {
         WindowGroup {
