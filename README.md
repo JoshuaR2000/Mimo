@@ -32,6 +32,9 @@ CharacterController (mood, gesture) ──► BipedRig (RealityKit, 60 fps)
 - **Structured replies:** every answer comes back as JSON with the spoken reply, a mood, and an optional gesture, so the character's body language matches what it says.
 - **Tool use:** the model calls Swift functions (EventKit, notifications, Open-Meteo weather) and only confirms an action after the tool succeeds.
 - **Memory:** lasting facts about the user and notes are stored on the device and added to the assistant's instructions.
+- **Conversations persist:** chat history is saved on the device, and recent turns are sent as context after a relaunch or a character switch.
+- **Fast replies:** light reasoning for quick spoken answers; the caption appears immediately and speech starts with the first sentence while the rest is generated.
+- **Accessibility:** VoiceOver labels and announcements, Dynamic Type captions, and Reduce Motion support (no bouncing, swaying or glancing).
 - **Lip sync:** the mouth follows the real loudness of the speech audio.
 - **Privacy:** the API key is stored in the keychain and only sent to OpenAI. Speech recognition runs on the device when the device supports it; otherwise Apple's speech service handles it.
 - **Siri and Shortcuts:** "Ask Mimo" opens the app and asks your question.

@@ -78,7 +78,10 @@ struct CharacterStage: View {
                 }
                 .onEnded { _ in dragStartYaw = nil }
         )
-        .accessibilityLabel("\(controller.kind.displayName), your assistant")
+        .accessibilityElement()
+        .accessibilityLabel("\(controller.kind.displayName), your \(controller.kind.title.lowercased()) assistant")
+        .accessibilityValue("Looking \(controller.mood.label.lowercased())")
+        .accessibilityHint("Drag left or right to turn the character around.")
     }
 
     /// A soft gradient "sky" used as image-based lighting so surfaces look glossy.

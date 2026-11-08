@@ -79,13 +79,32 @@ struct CharacterTests {
 @MainActor
 struct OfflineBrainTests {
     @Test func greetsWithAWave() async throws {
-        let reply = try await OfflineBrain(name: "Zuri").reply(to: "hello there")
+        let reply = try await OfflineBrain(name: "Zuri").reply(to: "hello there", context: [])
         #expect(reply.gesture == .wave)
         #expect(reply.text.contains("Zuri"))
     }
 
     @Test func pointsToSettingsWhenUnsure() async throws {
-        let reply = try await OfflineBrain(name: "Bolt").reply(to: "what's the capital of France?")
+        let reply = try await OfflineBrain(name: "Bolt").reply(to: "what's the capital of France?", context: [])
         #expect(reply.text.contains("API key"))
+    }
+}
+
+@MainActor
+struct ConversationTests {
+    @Test func splitsLongRepliesAtTheFirstSentence() {
+        let parts = Conversation.splitForSpeech("It's overcast in Austin right now. The high is 64 and the low is 58 degrees.")
+        #expect(parts == ["It's overcast in Austin right now.", "The high is 64 and the low is 58 degrees."])
+    }
+
+    @Test func keepsShortRepliesWhole() {
+        #expect(Conversation.splitForSpeech("Hi there! How are you?") == ["Hi there! How are you?"])
+        #expect(Conversation.splitForSpeech("Done. Reminder set for Monday.") == ["Done. Reminder set for Monday."])
+    }
+
+    @Test func chatLinesSurviveSaving() throws {
+        let lines = [ChatLine(speaker: .user, text: "Hi"), ChatLine(speaker: .assistant, text: "Hello!")]
+        let decoded = try JSONDecoder().decode([ChatLine].self, from: JSONEncoder().encode(lines))
+        #expect(decoded == lines)
     }
 }

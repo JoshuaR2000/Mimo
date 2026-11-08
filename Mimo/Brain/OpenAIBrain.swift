@@ -19,16 +19,40 @@ final class OpenAIBrain: AssistantBrain {
 
     func reset() { previousResponseID = nil }
 
-    func reply(to message: String) async throws -> AssistantReply {
-        var input: [[String: Any]] = [["role": "user", "content": message]]
+    func reply(to message: String, context: [ChatLine]) async throws -> AssistantReply {
+        do {
+            return try await run(message, context: context)
+        } catch is StaleConversation {
+            // OpenAI no longer has the earlier conversation: start fresh with our own copy of it.
+            previousResponseID = nil
+            return try await run(message, context: context)
+        }
+    }
+
+    private struct StaleConversation: Error {}
+
+    /// Reasoning models answer much faster with light reasoning, which suits quick spoken replies.
+    private var isReasoningModel: Bool { model.hasPrefix("gpt-5") || model.hasPrefix("o") }
+
+    private func run(_ message: String, context: [ChatLine]) async throws -> AssistantReply {
+        var input: [[String: Any]] = []
+        if previousResponseID == nil {
+            input = context.map { ["role": $0.speaker == .user ? "user" : "assistant", "content": $0.text] }
+        }
+        input.append(["role": "user", "content": message])
         for _ in 0..<6 {
+            var text: [String: Any] = ["format": Self.replyFormat]
             var body: [String: Any] = [
                 "model": model,
                 "instructions": instructions(),
                 "input": input,
                 "tools": [["type": "web_search"]] + tools.definitions,
-                "text": ["format": Self.replyFormat],
             ]
+            if isReasoningModel {
+                body["reasoning"] = ["effort": "low"]
+                text["verbosity"] = "low"
+            }
+            body["text"] = text
             if let previousResponseID { body["previous_response_id"] = previousResponseID }
 
             let response = try await post(body)
@@ -66,7 +90,8 @@ final class OpenAIBrain: AssistantBrain {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             let detail = (json["error"] as? [String: Any])?["message"] as? String ?? "HTTP \(status)"
-            if status == 401 { throw BrainError(message: "OpenAI rejected the API key. Check it in Settings.") }
+            if status == 401 { throw BrainError(message: "OpenAI rejected the API key. Check it in Settings → Advanced.") }
+            if status == 400 || status == 404, detail.lowercased().contains("previous response") { throw StaleConversation() }
             if status == 429 {
                 let code = (json["error"] as? [String: Any])?["code"] as? String
                 if code == "insufficient_quota" {
@@ -146,6 +171,7 @@ func makeInstructions(character: CharacterKind, userName: String, memory: Memory
     - Dates and times you pass to tools use the user's local time, written like 2026-11-09T09:00:00.
 
     Current local date and time: \(date) (time zone \(TimeZone.current.identifier)).
+    Units: use \(Locale.current.measurementSystem == .us ? "US units (°F, miles, pounds)" : "metric units (°C, km, kg)") unless asked otherwise.
 
     What you remember about \(who):
     \(facts)

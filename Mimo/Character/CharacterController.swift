@@ -32,6 +32,8 @@ final class CharacterController {
     /// True while a reply is being shown without audio (mouth flaps on its own).
     var speaking = false
     var yaw: Float = 0
+    /// Mirrors the system Reduce Motion setting: no bouncing, swaying or glancing around.
+    var reduceMotion = false
     private(set) var gesture: CharacterGesture?
     private(set) var gestureToken = 0
 

@@ -1,11 +1,32 @@
 import Foundation
+import SwiftUI
 import Observation
 
-struct ChatLine: Identifiable, Hashable {
-    enum Speaker { case user, assistant }
-    let id = UUID()
+struct ChatLine: Identifiable, Hashable, Codable {
+    enum Speaker: String, Codable { case user, assistant }
+    var id = UUID()
     let speaker: Speaker
     let text: String
+    var date = Date()
+}
+
+/// Keeps the conversation on the device so it survives closing the app.
+enum HistoryStore {
+    private static let url: URL = {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Mimo", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("history.json")
+    }()
+
+    static func load() -> [ChatLine] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        return (try? JSONDecoder().decode([ChatLine].self, from: data)) ?? []
+    }
+
+    static func save(_ lines: [ChatLine]) {
+        let recent = Array(lines.suffix(200))
+        if let data = try? JSONEncoder().encode(recent) { try? data.write(to: url, options: .atomic) }
+    }
 }
 
 /// Runs a conversation turn: sends the message to the brain, then makes the character act and speak the reply.
@@ -13,7 +34,9 @@ struct ChatLine: Identifiable, Hashable {
 @Observable
 final class Conversation {
     private(set) var caption = ""
-    private(set) var history: [ChatLine] = []
+    private(set) var history: [ChatLine] = HistoryStore.load() {
+        didSet { HistoryStore.save(history) }
+    }
     private(set) var isThinking = false
     var errorMessage: String?
 
@@ -53,8 +76,11 @@ final class Conversation {
 
     func greet() {
         let name = app.userName.isEmpty ? "" : ", \(app.userName)"
-        let line = "Hi\(name)! I'm \(app.character.displayName). What can I help you with?"
-        perform(AssistantReply(text: line, mood: .happy, gesture: .wave), speakAloud: false)
+        let returning = history.contains { $0.speaker == .user }
+        let line = returning
+            ? "Welcome back\(name)! What's next?"
+            : "Hi\(name)! I'm \(app.character.displayName). What can I help you with?"
+        perform(AssistantReply(text: line, mood: .happy, gesture: .wave), speakAloud: false, record: false)
     }
 
     func send(_ text: String) {
@@ -62,6 +88,8 @@ final class Conversation {
         guard !message.isEmpty else { return }
         interrupt()
         refreshBrain()
+        // Recent turns give the brain context after a relaunch or a character switch.
+        let context = Array(history.suffix(12))
         history.append(ChatLine(speaker: .user, text: message))
         errorMessage = nil
         turn = Task {
@@ -69,7 +97,7 @@ final class Conversation {
             app.controller.mood = .thinking
             caption = "…"
             do {
-                let reply = try await brain.reply(to: message)
+                let reply = try await brain.reply(to: message, context: context)
                 isThinking = false
                 guard !Task.isCancelled else { return }
                 await act(reply, speakAloud: app.voiceEnabled && app.hasAPIKey)
@@ -81,15 +109,15 @@ final class Conversation {
                 isThinking = false
                 guard !Task.isCancelled else { return }
                 errorMessage = error.localizedDescription
-                await act(AssistantReply(text: "Hmm, I couldn't get an answer just now. The details are above.", mood: .concerned, gesture: .shrug), speakAloud: false)
+                await act(AssistantReply(text: "Hmm, I couldn't get an answer just now. The details are above.", mood: .concerned, gesture: .shrug), speakAloud: false, record: false)
             }
         }
     }
 
     /// Shows a reply without asking the brain (greetings, demos).
-    func perform(_ reply: AssistantReply, speakAloud: Bool) {
+    func perform(_ reply: AssistantReply, speakAloud: Bool, record: Bool = true) {
         interrupt()
-        turn = Task { await act(reply, speakAloud: speakAloud) }
+        turn = Task { await act(reply, speakAloud: speakAloud, record: record) }
     }
 
     /// Stops talking immediately, e.g. when the user starts speaking.
@@ -142,7 +170,7 @@ final class Conversation {
     }
 
     private func didNotCatchThat() {
-        perform(AssistantReply(text: "Sorry, I didn't catch that. Tap the mic and try again.", mood: .concerned, gesture: nil), speakAloud: false)
+        perform(AssistantReply(text: "Sorry, I didn't catch that. Tap the mic and try again.", mood: .concerned, gesture: nil), speakAloud: false, record: false)
     }
 
     func clearConversation() {
@@ -152,11 +180,13 @@ final class Conversation {
         brain.reset()
     }
 
-    private func act(_ reply: AssistantReply, speakAloud: Bool) async {
+    private func act(_ reply: AssistantReply, speakAloud: Bool, record: Bool = true) async {
         let controller = app.controller
-        history.append(ChatLine(speaker: .assistant, text: reply.text))
+        if record { history.append(ChatLine(speaker: .assistant, text: reply.text)) }
         controller.mood = reply.mood
         if let g = reply.gesture { controller.perform(g) }
+        // VoiceOver users hear the reply read out.
+        AccessibilityNotification.Announcement("\(app.character.displayName): \(reply.text)").post()
 
         // Start downloading the voice right away, but don't wait for it: the caption
         // starts immediately and the audio joins in as soon as it arrives.
@@ -165,10 +195,22 @@ final class Conversation {
             let voice = voice, app = app
             voiceTask = Task {
                 do {
-                    let data = try await voice.synthesize(reply.text, voice: app.character.voice, style: app.character.voiceStyle, apiKey: app.apiKey)
-                    guard !Task.isCancelled else { return }
-                    _ = try voice.play(data)
+                    // Speak the first sentence as soon as it's ready while the rest is still being made.
+                    let parts = Self.splitForSpeech(reply.text)
+                    let synth = { (text: String) in
+                        try await voice.synthesize(text, voice: app.character.voice, style: app.character.voiceStyle, apiKey: app.apiKey)
+                    }
+                    let rest = parts.count > 1 ? Task { try await synth(parts[1]) } : nil
+                    let first = try await synth(parts[0])
+                    guard !Task.isCancelled else { rest?.cancel(); return }
+                    _ = try voice.play(first)
                     controller.speaking = false // the real audio drives the mouth from here
+                    if let rest {
+                        let data = try await rest.value
+                        await voice.waitUntilFinished()
+                        guard !Task.isCancelled else { return }
+                        _ = try voice.play(data)
+                    }
                 } catch is CancellationError {
                 } catch {
                     if !Task.isCancelled { self.errorMessage = error.localizedDescription }
@@ -189,6 +231,23 @@ final class Conversation {
         await voice.waitUntilFinished()
         try? await Task.sleep(for: .seconds(2.5))
         if !Task.isCancelled { controller.mood = .neutral }
+    }
+
+    /// Splits a reply into its first sentence and the rest, so speech can start sooner.
+    static func splitForSpeech(_ text: String) -> [String] {
+        let enders: Set<Character> = [".", "!", "?"]
+        var index = text.startIndex
+        while index < text.endIndex {
+            let next = text.index(after: index)
+            if enders.contains(text[index]), next < text.endIndex, text[next] == " ",
+               text.distance(from: text.startIndex, to: index) >= 20 {
+                let first = String(text[...index]).trimmingCharacters(in: .whitespaces)
+                let rest = String(text[next...]).trimmingCharacters(in: .whitespaces)
+                return rest.count >= 12 ? [first, rest] : [text]
+            }
+            index = next
+        }
+        return [text]
     }
 
     /// Lets the character speak up on its own, e.g. when a timer ends.

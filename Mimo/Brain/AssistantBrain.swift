@@ -10,7 +10,8 @@ struct AssistantReply {
 /// Anything that can produce replies. The rest of the app only talks to this, so providers can be swapped.
 @MainActor
 protocol AssistantBrain: AnyObject {
-    func reply(to message: String) async throws -> AssistantReply
+    /// `context` holds recent turns, used when the brain has no conversation of its own yet.
+    func reply(to message: String, context: [ChatLine]) async throws -> AssistantReply
     func reset()
 }
 
@@ -27,7 +28,7 @@ final class OfflineBrain: AssistantBrain {
 
     func reset() {}
 
-    func reply(to message: String) async throws -> AssistantReply {
+    func reply(to message: String, context: [ChatLine]) async throws -> AssistantReply {
         let lower = message.lowercased()
         func has(_ words: [String]) -> Bool { words.contains { lower.range(of: "\\b\($0)\\b", options: .regularExpression) != nil } }
         if has(["joke"]) { return .init(text: "Why did the computer go to the doctor? It had a virus!", mood: .laughing, gesture: .jump) }
@@ -35,6 +36,6 @@ final class OfflineBrain: AssistantBrain {
         if has(["great", "awesome", "love", "thanks", "passed", "won", "amazing"]) { return .init(text: "That's great to hear!", mood: .happy, gesture: .jump) }
         if has(["hi", "hello", "hey"]) { return .init(text: "Hi! I'm \(name). Nice to meet you!", mood: .happy, gesture: .wave) }
         if has(["switch", "change"]) { return .init(text: "You can switch characters with the menu at the top left.", mood: .neutral, gesture: .nod) }
-        return .init(text: "I'm in offline mode right now. Add an OpenAI API key in Settings and I can really talk.", mood: .concerned, gesture: .shrug)
+        return .init(text: "I'm in offline mode right now. Add an OpenAI API key in Settings → Advanced and I can really talk.", mood: .concerned, gesture: .shrug)
     }
 }

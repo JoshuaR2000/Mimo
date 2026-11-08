@@ -450,8 +450,10 @@ final class BipedRig {
                 case .nod: nod = sin(gestureT * 11) * 0.16 * env
                 case .shake: shake = sin(gestureT * 12) * 0.3 * env
                 case .jump:
-                    jumpY = max(0, sin(.pi * min(1, p * 1.15))) * 0.5
-                    squash = p > 0.85 ? sin(.pi * (p - 0.85) / 0.15) * 0.1 : 0
+                    if !c.reduceMotion {
+                        jumpY = max(0, sin(.pi * min(1, p * 1.15))) * 0.5
+                        squash = p > 0.85 ? sin(.pi * (p - 0.85) / 0.15) * 0.1 : 0
+                    }
                     let up = ArmPose(z: 0.9 * ramp + 0.12, x: -0.3 * ramp, ex: -0.6 * ramp, ez: 0)
                     overrides = [up, up]
                 case .wave:
@@ -470,29 +472,30 @@ final class BipedRig {
             let target = overrides[i] ?? (c.mood == .thinking && i == 1 ? .chin : .target(c.mood))
             armPoses[i].approach(target, 1 - exp(-dt * (overrides[i] == nil ? 7 : 18)))
             let a = armPoses[i]
-            let sway = sin(t * 1.6 + side) * 0.03
+            let sway = c.reduceMotion ? 0 : sin(t * 1.6 + side) * 0.03
             shoulders[i].orientation = euler(a.x + sway, 0, side * a.z)
             elbows[i].orientation = euler(a.ex, 0, side * a.ez)
         }
 
         // Body
-        let laughBob: Float = c.mood == .laughing ? abs(sin(t * 9)) * 0.04 : 0
+        let motion: Float = c.reduceMotion ? 0 : 1
+        let laughBob: Float = c.mood == .laughing ? abs(sin(t * 9)) * 0.04 * motion : 0
         root.position.y = jumpY + laughBob
-        let weight = sin(t * 0.45) * 0.012
+        let weight = sin(t * 0.45) * 0.012 * motion
         root.position.x = weight
         root.scale = [1 + squash * 0.6, 1 - squash, 1 + squash * 0.6]
         root.orientation = simd_quatf(angle: c.yaw, axis: [0, 1, 0])
-        torso.orientation = euler(0, 0, sin(t * 0.9) * 0.02 - face.tilt * 0.2 - weight * 2.5)
-        torso.scale = [1, 1 + sin(t * 2.2) * 0.01, 1]
+        torso.orientation = euler(0, 0, sin(t * 0.9) * 0.02 * motion - face.tilt * 0.2 - weight * 2.5)
+        torso.scale = [1, 1 + sin(t * 2.2) * 0.01 * motion, 1]
         for (i, hip) in hips.enumerated() { hip.orientation = euler(0, 0, (i == 0 ? -1 : 1) * 0.02 + sin(t * 0.9) * 0.01) }
         glanceIn -= dt
         if glanceIn <= 0 {
-            let calm = (c.mood == .neutral || c.mood == .happy) && !c.speaking
+            let calm = (c.mood == .neutral || c.mood == .happy) && !c.speaking && !c.reduceMotion
             glanceTarget = calm && Float.random(in: 0...1) < 0.6 ? [Float.random(in: -0.35...0.35), Float.random(in: -0.12...0.08)] : .zero
             glanceIn = Float.random(in: 1.8...5)
         }
         glance += (glanceTarget - glance) * (1 - exp(-dt * 4))
-        head.orientation = euler(face.pitch + nod + glance.y, shake + glance.x, -face.tilt - gTilt + sin(t * 0.7) * 0.02)
+        head.orientation = euler(face.pitch + nod + glance.y, shake + glance.x, -face.tilt - gTilt + sin(t * 0.7) * 0.02 * motion)
 
         // Eyes: lids close from the top; a happy squint narrows the eye from below
         let open = max(0.05, min(1.3, face.eyeOpen * (1 - blink)))

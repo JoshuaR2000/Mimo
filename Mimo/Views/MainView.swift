@@ -8,6 +8,7 @@ struct MainView: View {
     @State private var showSettings = false
     @State private var showHistory = false
     @FocusState private var inputFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let pending = PendingRequests.shared
 
     init(app: AppState) {
@@ -30,6 +31,7 @@ struct MainView: View {
         .sheet(isPresented: $showSettings, onDismiss: conversation.refreshBrain) { SettingsView(app: app, conversation: conversation) }
         .sheet(isPresented: $showHistory) { HistoryView(lines: conversation.history) }
         .onAppear {
+            app.controller.reduceMotion = reduceMotion
             NotificationRelay.shared.onDeliver = { [conversation] text in
                 conversation.announce("Time's up! \(text)")
             }
@@ -39,6 +41,7 @@ struct MainView: View {
         .onChange(of: pending.question) { _, q in
             if let q { pending.question = nil; conversation.send(q) }
         }
+        .onChange(of: reduceMotion) { _, value in app.controller.reduceMotion = value }
         .onChange(of: app.character) { _, _ in
             conversation.refreshBrain()
             conversation.greet()
@@ -113,9 +116,11 @@ struct MainView: View {
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
             } else if !conversation.caption.isEmpty && !conversation.listener.isActive {
                 Text(conversation.caption)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .accessibilityLabel("\(app.character.displayName) says: \(conversation.caption)")
             }
         }
         .frame(maxWidth: 640)
@@ -144,7 +149,8 @@ struct MainView: View {
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(conversation.listener.isActive ? "Stop listening and send" : "Talk")
+                .accessibilityLabel(conversation.listener.isActive ? "Stop listening and send" : "Talk to \(app.character.displayName)")
+                .accessibilityHint(conversation.listener.isActive ? "Sends what you said." : "Starts listening to your voice.")
             } else {
                 Button(action: send) {
                     Image(systemName: "arrow.up").font(.title3.bold())
