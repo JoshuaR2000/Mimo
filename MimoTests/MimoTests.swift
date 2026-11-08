@@ -108,3 +108,14 @@ struct ConversationTests {
         #expect(decoded == lines)
     }
 }
+
+@MainActor
+struct ModelListTests {
+    @Test("Keeps chat models", arguments: ["gpt-5", "gpt-5-mini", "gpt-4.1", "o3", "o4-mini"])
+    func keeps(_ id: String) { #expect(OpenAIBrain.isChatModel(id)) }
+
+    @Test("Drops audio, image and other non-chat models", arguments: [
+        "gpt-4o-mini-tts", "gpt-4o-transcribe", "gpt-realtime", "gpt-image-1", "text-embedding-3-small", "omni-moderation-latest", "dall-e-3", "whisper-1",
+    ])
+    func drops(_ id: String) { #expect(!OpenAIBrain.isChatModel(id)) }
+}

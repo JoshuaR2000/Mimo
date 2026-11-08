@@ -9,6 +9,8 @@ final class OpenAIBrain: AssistantBrain {
     private let tools: ToolBox
     private let instructions: () -> String
     private var previousResponseID: String?
+    /// Some smaller or older models can't use web search; after the first refusal we stop offering it.
+    private var webSearchUnsupported = false
 
     init(apiKey: String, model: String, tools: ToolBox, instructions: @escaping () -> String) {
         self.apiKey = apiKey
@@ -26,10 +28,36 @@ final class OpenAIBrain: AssistantBrain {
             // OpenAI no longer has the earlier conversation: start fresh with our own copy of it.
             previousResponseID = nil
             return try await run(message, context: context)
+        } catch is WebSearchUnsupported {
+            webSearchUnsupported = true
+            return try await run(message, context: context)
         }
     }
 
     private struct StaleConversation: Error {}
+    private struct WebSearchUnsupported: Error {}
+
+    /// The chat models this API key can use, newest naming first. Audio, image and embedding models are left out.
+    static func availableModels(apiKey: String) async throws -> [String] {
+        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/models")!)
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw BrainError(message: "Couldn't load the model list from OpenAI.") }
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+        let ids = (json["data"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }
+        // GPT models first, newest version first; dated snapshots (e.g. o3-2025-04-16) are hidden as duplicates.
+        let dated = /-\d{4}-\d{2}-\d{2}$/
+        return ids.filter { isChatModel($0) && $0.firstMatch(of: dated) == nil }.sorted { a, b in
+            let ag = a.hasPrefix("gpt-"), bg = b.hasPrefix("gpt-")
+            return ag != bg ? ag : a.localizedStandardCompare(b) == .orderedDescending
+        }
+    }
+
+    static func isChatModel(_ id: String) -> Bool {
+        let chatFamily = id.hasPrefix("gpt-") || (id.hasPrefix("o") && id.dropFirst().first?.isNumber == true)
+        let excluded = ["audio", "realtime", "tts", "transcribe", "image", "embedding", "search", "instruct", "moderation", "dall-e", "codex"]
+        return chatFamily && !excluded.contains { id.contains($0) }
+    }
 
     /// Reasoning models answer much faster with light reasoning, which suits quick spoken replies.
     private var isReasoningModel: Bool { model.hasPrefix("gpt-5") || model.hasPrefix("o") }
@@ -46,7 +74,7 @@ final class OpenAIBrain: AssistantBrain {
                 "model": model,
                 "instructions": instructions(),
                 "input": input,
-                "tools": [["type": "web_search"]] + tools.definitions,
+                "tools": (webSearchUnsupported ? [] : [["type": "web_search"]]) + tools.definitions,
             ]
             if isReasoningModel {
                 body["reasoning"] = ["effort": "low"]
@@ -92,6 +120,10 @@ final class OpenAIBrain: AssistantBrain {
             let detail = (json["error"] as? [String: Any])?["message"] as? String ?? "HTTP \(status)"
             if status == 401 { throw BrainError(message: "OpenAI rejected the API key. Check it in Settings → Advanced.") }
             if status == 400 || status == 404, detail.lowercased().contains("previous response") { throw StaleConversation() }
+            if status == 400, !webSearchUnsupported, detail.lowercased().contains("web_search") { throw WebSearchUnsupported() }
+            if status == 404 || detail.lowercased().contains("model") && detail.lowercased().contains("does not exist") {
+                throw BrainError(message: "OpenAI doesn't recognize the model \"\(model)\". Pick another in Settings → Advanced → Model.")
+            }
             if status == 429 {
                 let code = (json["error"] as? [String: Any])?["code"] as? String
                 if code == "insufficient_quota" {

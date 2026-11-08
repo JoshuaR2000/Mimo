@@ -115,8 +115,11 @@ struct AdvancedSettingsView: View {
                     Label("Key saved", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     Button("Remove key", role: .destructive) { app.apiKey = "" }
                 }
-                TextField("Model", text: $app.model)
-                    .autocorrectionDisabled()
+                NavigationLink {
+                    ModelPickerView(app: app)
+                } label: {
+                    LabeledContent("Model", value: app.model)
+                }
             } header: {
                 Text("OpenAI")
             } footer: {
