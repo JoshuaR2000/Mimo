@@ -67,7 +67,13 @@ final class OpenAIBrain: AssistantBrain {
         guard (200..<300).contains(status) else {
             let detail = (json["error"] as? [String: Any])?["message"] as? String ?? "HTTP \(status)"
             if status == 401 { throw BrainError(message: "OpenAI rejected the API key. Check it in Settings.") }
-            if status == 429 { throw BrainError(message: "OpenAI says the account is out of credit or rate-limited. \(detail)") }
+            if status == 429 {
+                let code = (json["error"] as? [String: Any])?["code"] as? String
+                if code == "insufficient_quota" {
+                    throw BrainError(message: "OpenAI says the account has no usable credit. If you just added some, it can take a few minutes to activate. If it keeps happening, create a new API key and paste it in Settings.")
+                }
+                throw BrainError(message: "OpenAI is getting too many requests right now. Wait a moment and try again.")
+            }
             throw BrainError(message: "OpenAI error: \(detail)")
         }
         return json
