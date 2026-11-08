@@ -36,8 +36,13 @@ struct SettingsView: View {
                 Section {
                     SecureField(app.hasAPIKey ? "Key saved. Paste to replace." : "Paste API key (sk-…)", text: $keyDraft)
                         .autocorrectionDisabled()
-                    if !keyDraft.isEmpty {
-                        Button("Save key") { app.apiKey = keyDraft.trimmingCharacters(in: .whitespacesAndNewlines); keyDraft = "" }
+                        .onSubmit(saveKey)
+                        .onChange(of: keyDraft) { _, new in
+                            // Pasting a full key saves it right away.
+                            if new.trimmingCharacters(in: .whitespacesAndNewlines).count > 30 { saveKey() }
+                        }
+                    if app.hasAPIKey {
+                        Label("Key saved", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     }
                     if app.hasAPIKey {
                         Button("Remove key", role: .destructive) { app.apiKey = "" }
@@ -86,10 +91,18 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .navigationTitle("Settings")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { saveKey(); dismiss() } } }
+            .onDisappear(perform: saveKey)
             .confirmationDialog("Erase everything \(app.character.displayName) remembers and all notes?", isPresented: $confirmClear, titleVisibility: .visible) {
                 Button("Erase", role: .destructive) { app.memory.clearAll() }
             }
         }
+    }
+
+    private func saveKey() {
+        let key = keyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        app.apiKey = key
+        keyDraft = ""
     }
 }

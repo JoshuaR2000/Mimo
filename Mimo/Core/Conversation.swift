@@ -73,7 +73,7 @@ final class Conversation {
                 isThinking = false
                 guard !Task.isCancelled else { return }
                 errorMessage = error.localizedDescription
-                await act(AssistantReply(text: "Sorry, something went wrong. \(error.localizedDescription)", mood: .concerned, gesture: .shrug), speakAloud: false)
+                await act(AssistantReply(text: "Hmm, I couldn't get an answer just now. The details are above.", mood: .concerned, gesture: .shrug), speakAloud: false)
             }
         }
     }
