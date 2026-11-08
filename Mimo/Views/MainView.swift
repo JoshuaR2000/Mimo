@@ -88,12 +88,21 @@ struct MainView: View {
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
             }
-            if conversation.listener.isActive {
-                Text(conversation.listener.transcript.isEmpty ? "Listening…" : conversation.listener.transcript)
-                    .font(.subheadline).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+            if let error = conversation.listener.lastError, !app.hasAPIKey {
+                Label(error, systemImage: "mic.slash.fill")
+                    .font(.footnote).foregroundStyle(.orange)
                     .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+            }
+            if conversation.listener.isActive {
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(conversation.listener.transcript.isEmpty ? "Listening… start talking" : conversation.listener.transcript)
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    MicLevelBar(level: conversation.listener.level)
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
             }
             if conversation.isThinking {
                 HStack(spacing: 8) { ProgressView(); Text("Thinking…").foregroundStyle(.secondary) }
@@ -204,5 +213,24 @@ struct HistoryView: View {
             .navigationTitle("Conversation")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
+    }
+}
+
+/// A small bar that moves with microphone volume, so it's obvious whether sound is getting through.
+struct MicLevelBar: View {
+    let level: Float
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.white.opacity(0.15))
+                Capsule().fill(level > 0.05 ? Color.green : Color.gray)
+                    .frame(width: max(6, geo.size.width * CGFloat(level)))
+                    .animation(.linear(duration: 0.08), value: level)
+            }
+        }
+        .frame(width: 140, height: 6)
+        .accessibilityLabel("Microphone level")
+        .accessibilityValue("\(Int(level * 100)) percent")
     }
 }

@@ -97,10 +97,13 @@ final class Conversation {
             listener.stop()
         } else if listener.isListening {
             let heard = listener.stop().trimmingCharacters(in: .whitespacesAndNewlines)
-            if heard.isEmpty {
-                perform(AssistantReply(text: "Sorry, I didn't catch that. Tap the mic and try again.", mood: .concerned, gesture: nil), speakAloud: false)
-            } else {
+            if !heard.isEmpty {
                 send(heard)
+            } else if app.hasAPIKey, let recording = listener.recordingURL {
+                // Apple's recognizer gave nothing (common in the simulator): let OpenAI transcribe the recording.
+                transcribeThenSend(recording)
+            } else {
+                didNotCatchThat()
             }
         } else {
             interrupt()
@@ -108,6 +111,29 @@ final class Conversation {
                 do { try await listener.start() } catch { errorMessage = error.localizedDescription }
             }
         }
+    }
+
+    private func transcribeThenSend(_ recording: URL) {
+        interrupt()
+        let key = app.apiKey
+        turn = Task {
+            isThinking = true
+            app.controller.mood = .thinking
+            do {
+                let text = try await Transcriber.transcribe(recording, apiKey: key)
+                isThinking = false
+                guard !Task.isCancelled else { return }
+                if text.isEmpty { didNotCatchThat() } else { send(text) }
+            } catch {
+                isThinking = false
+                errorMessage = error.localizedDescription
+                didNotCatchThat()
+            }
+        }
+    }
+
+    private func didNotCatchThat() {
+        perform(AssistantReply(text: "Sorry, I didn't catch that. Tap the mic and try again.", mood: .concerned, gesture: nil), speakAloud: false)
     }
 
     func clearConversation() {
