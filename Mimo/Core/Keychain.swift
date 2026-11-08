@@ -3,7 +3,7 @@ import Security
 
 /// Stores small secrets (the API key) in the device keychain, never in source code or settings files.
 enum Keychain {
-    private static let service = "com.joshua.Mimo"
+    private static let service = "com.joshrayos.mimo"
 
     static func read(_ account: String) -> String? {
         let query: [String: Any] = [
