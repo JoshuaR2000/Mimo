@@ -33,7 +33,7 @@ CharacterController (mood, gesture) ──► BipedRig (RealityKit, 60 fps)
 - **Tool use:** the model calls Swift functions (EventKit, notifications, Open-Meteo weather) and only confirms an action after the tool succeeds.
 - **Memory:** lasting facts about the user and notes are stored on the device and added to the assistant's instructions.
 - **Lip sync:** the mouth follows the real loudness of the speech audio.
-- **Privacy:** the API key is stored in the keychain and only sent to OpenAI. Speech recognition runs on the device.
+- **Privacy:** the API key is stored in the keychain and only sent to OpenAI. Speech recognition runs on the device when the device supports it; otherwise Apple's speech service handles it.
 - **Siri and Shortcuts:** "Ask Mimo" opens the app and asks your question.
 
 ## Running it

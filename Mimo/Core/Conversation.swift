@@ -93,9 +93,15 @@ final class Conversation {
     }
 
     func toggleListening() {
-        if listener.isListening {
-            let heard = listener.stop()
-            send(heard)
+        if listener.isStarting {
+            listener.stop()
+        } else if listener.isListening {
+            let heard = listener.stop().trimmingCharacters(in: .whitespacesAndNewlines)
+            if heard.isEmpty {
+                perform(AssistantReply(text: "Sorry, I didn't catch that. Tap the mic and try again.", mood: .concerned, gesture: nil), speakAloud: false)
+            } else {
+                send(heard)
+            }
         } else {
             interrupt()
             Task {

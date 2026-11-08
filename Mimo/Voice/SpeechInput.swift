@@ -9,6 +9,11 @@ import Observation
 final class SpeechInput {
     private(set) var transcript = ""
     private(set) var isListening = false
+    /// True while permissions and audio are being set up, before listening begins.
+    private(set) var isStarting = false
+    /// Listening or about to be: what the mic button should show.
+    var isActive: Bool { isListening || isStarting }
+    @ObservationIgnored private var cancelPending = false
 
     @ObservationIgnored private let engine = AVAudioEngine()
     @ObservationIgnored private var request: SFSpeechAudioBufferRecognitionRequest?
@@ -16,6 +21,10 @@ final class SpeechInput {
     @ObservationIgnored private let recognizer = SFSpeechRecognizer()
 
     func start() async throws {
+        guard !isActive else { return }
+        isStarting = true
+        cancelPending = false
+        defer { isStarting = false }
         let speechOK = await withCheckedContinuation { cont in
             SFSpeechRecognizer.requestAuthorization { cont.resume(returning: $0 == .authorized) }
         }
@@ -24,6 +33,7 @@ final class SpeechInput {
             throw BrainError(message: "Mimo doesn't have microphone access. You can allow it in Settings.")
         }
         guard let recognizer, recognizer.isAvailable else { throw BrainError(message: "Speech recognition isn't available right now.") }
+        if cancelPending { cancelPending = false; return }
 
         #if os(iOS) || os(visionOS)
         let session = AVAudioSession.sharedInstance()
@@ -34,6 +44,8 @@ final class SpeechInput {
         transcript = ""
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
+        // Keep audio on the device whenever the device can recognize speech by itself.
+        if recognizer.supportsOnDeviceRecognition { request.requiresOnDeviceRecognition = true }
         self.request = request
 
         let input = engine.inputNode
@@ -55,6 +67,7 @@ final class SpeechInput {
     /// Stops listening and returns what was heard.
     @discardableResult
     func stop() -> String {
+        if isStarting { cancelPending = true; return "" }
         guard isListening else { return transcript }
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)

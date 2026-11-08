@@ -88,7 +88,7 @@ struct MainView: View {
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
             }
-            if conversation.listener.isListening {
+            if conversation.listener.isActive {
                 Text(conversation.listener.transcript.isEmpty ? "Listening…" : conversation.listener.transcript)
                     .font(.subheadline).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -99,7 +99,7 @@ struct MainView: View {
                 HStack(spacing: 8) { ProgressView(); Text("Thinking…").foregroundStyle(.secondary) }
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-            } else if !conversation.caption.isEmpty {
+            } else if !conversation.caption.isEmpty && !conversation.listener.isActive {
                 Text(conversation.caption)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14).padding(.vertical, 10)
@@ -124,14 +124,14 @@ struct MainView: View {
                 .onSubmit(send)
             if input.isEmpty {
                 Button(action: conversation.toggleListening) {
-                    Image(systemName: conversation.listener.isListening ? "stop.fill" : "mic.fill")
+                    Image(systemName: conversation.listener.isActive ? "stop.fill" : "mic.fill")
                         .font(.title3)
                         .frame(width: 46, height: 46)
-                        .background(conversation.listener.isListening ? Color.red : Color.accentColor, in: Circle())
+                        .background(conversation.listener.isActive ? Color.red : Color.accentColor, in: Circle())
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(conversation.listener.isListening ? "Stop listening and send" : "Talk")
+                .accessibilityLabel(conversation.listener.isActive ? "Stop listening and send" : "Talk")
             } else {
                 Button(action: send) {
                     Image(systemName: "arrow.up").font(.title3.bold())
