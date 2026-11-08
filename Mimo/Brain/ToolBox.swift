@@ -12,8 +12,12 @@ import AppKit
 final class ToolBox {
     private let memory: MemoryStore
     private let events = EKEventStore()
+    private let onSwitchCharacter: (CharacterKind) -> Void
 
-    init(memory: MemoryStore) { self.memory = memory }
+    init(memory: MemoryStore, onSwitchCharacter: @escaping (CharacterKind) -> Void = { _ in }) {
+        self.memory = memory
+        self.onSwitchCharacter = onSwitchCharacter
+    }
 
     // MARK: - Definitions sent to the model
 
@@ -32,6 +36,8 @@ final class ToolBox {
             fn("get_weather", "Current weather and today's high and low for a city.", ["city": str("City name, e.g. Austin")]),
             fn("open_maps", "Open Apple Maps to search for a place or get directions.", ["query": str("Place or address")]),
             fn("remember_fact", "Save a lasting fact about the user to long-term memory.", ["fact": str("Short fact, e.g. 'Has a dog named Max'")]),
+            fn("switch_character", "Hand the conversation to a different assistant character when the user asks: Zuri the alien, Bolt the robot, or Ava the human.",
+               ["character": ["type": "string", "enum": CharacterKind.allCases.map(\.rawValue), "description": "alien = Zuri, robot = Bolt, human = Ava"]]),
         ]
     }
 
@@ -60,6 +66,10 @@ final class ToolBox {
             case "set_timer": return try await setTimer(seconds: args["seconds"] as? Int ?? 60, label: args["label"] as? String)
             case "get_weather": return try await weather(city: args["city"] as? String ?? "")
             case "open_maps": return openMaps(args["query"] as? String ?? "")
+            case "switch_character":
+                guard let kind = CharacterKind(rawValue: args["character"] as? String ?? "") else { return "Failed: unknown character." }
+                onSwitchCharacter(kind)
+                return "\(kind.displayName) will take over right after this reply. Say a short, friendly handoff."
             case "remember_fact":
                 memory.remember(args["fact"] as? String ?? "")
                 return "Remembered."

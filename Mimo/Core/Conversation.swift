@@ -24,6 +24,8 @@ final class Conversation {
     @ObservationIgnored private var brainSignature = ""
     @ObservationIgnored private var turn: Task<Void, Never>?
     @ObservationIgnored private var voiceTask: Task<Void, Never>?
+    /// A character the assistant asked to switch to; applied once the current reply finishes.
+    @ObservationIgnored private var pendingSwitch: CharacterKind?
 
     init(app: AppState) {
         self.app = app
@@ -40,7 +42,8 @@ final class Conversation {
         brainSignature = signature
         if app.hasAPIKey {
             let app = app
-            brain = OpenAIBrain(apiKey: app.apiKey, model: app.model, tools: ToolBox(memory: app.memory)) {
+            let tools = ToolBox(memory: app.memory) { [weak self] kind in self?.pendingSwitch = kind }
+            brain = OpenAIBrain(apiKey: app.apiKey, model: app.model, tools: tools) {
                 makeInstructions(character: app.character, userName: app.userName, memory: app.memory)
             }
         } else {
@@ -70,6 +73,10 @@ final class Conversation {
                 isThinking = false
                 guard !Task.isCancelled else { return }
                 await act(reply, speakAloud: app.voiceEnabled && app.hasAPIKey)
+                if let kind = pendingSwitch, !Task.isCancelled {
+                    pendingSwitch = nil
+                    app.character = kind // the main screen greets with the new character
+                }
             } catch {
                 isThinking = false
                 guard !Task.isCancelled else { return }

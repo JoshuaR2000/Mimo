@@ -34,6 +34,7 @@ final class OfflineBrain: AssistantBrain {
         if has(["sad", "sorry", "failed", "lost", "bad", "tired", "sick"]) { return .init(text: "Oh no, I'm sorry. That sounds hard.", mood: .sad, gesture: nil) }
         if has(["great", "awesome", "love", "thanks", "passed", "won", "amazing"]) { return .init(text: "That's great to hear!", mood: .happy, gesture: .jump) }
         if has(["hi", "hello", "hey"]) { return .init(text: "Hi! I'm \(name). Nice to meet you!", mood: .happy, gesture: .wave) }
+        if has(["switch", "change"]) { return .init(text: "You can switch characters with the menu at the top left.", mood: .neutral, gesture: .nod) }
         return .init(text: "I'm in offline mode right now. Add an OpenAI API key in Settings and I can really talk.", mood: .concerned, gesture: .shrug)
     }
 }

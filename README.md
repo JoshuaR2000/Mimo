@@ -35,6 +35,8 @@ CharacterController (mood, gesture) ──► BipedRig (RealityKit, 60 fps)
 - **Lip sync:** the mouth follows the real loudness of the speech audio.
 - **Privacy:** the API key is stored in the keychain and only sent to OpenAI. Speech recognition runs on the device when the device supports it; otherwise Apple's speech service handles it.
 - **Siri and Shortcuts:** "Ask Mimo" opens the app and asks your question.
+- **Switch by asking:** say "Can I talk to Bolt?" and the current character hands the conversation over.
+- **Timers that speak up:** when a timer ends while the app is open, the character announces it.
 
 ## Running it
 
@@ -43,6 +45,14 @@ CharacterController (mood, gesture) ──► BipedRig (RealityKit, 60 fps)
 3. On first launch, pick a character, enter your name, and paste an OpenAI API key from [platform.openai.com](https://platform.openai.com). You can skip the key and use offline mode.
 
 The model can be changed in Settings (default: `gpt-5-mini`).
+
+## Tests
+
+Unit tests use Swift Testing and cover reply cleanup, date parsing for tool calls, character definitions, and the offline brain.
+
+```bash
+xcodebuild test -project Mimo.xcodeproj -scheme Mimo -destination 'platform=iOS Simulator,name=iPhone 18 Pro'
+```
 
 ## Project layout
 
@@ -54,6 +64,8 @@ Mimo/
   Voice/      Text-to-speech playback and speech recognition
   Views/      Onboarding, main screen, settings, 3D stage
   Intents/    Siri / Shortcuts integration
+MimoTests/    Unit tests (Swift Testing)
+tools/        make-icon.swift draws the app icon
 prototypes/   Early browser prototypes of the character designs
 ```
 
@@ -62,4 +74,4 @@ prototypes/   Early browser prototypes of the character designs
 - Professionally modeled and rigged characters (Blender → USDZ)
 - Home Screen widget
 - Optional server so users don't need their own API key
-- Unit tests for the brain and tool layer
+- More tests around the OpenAI client and tools (with a mocked network)

@@ -118,6 +118,7 @@ struct MainView: View {
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
             }
         }
+        .frame(maxWidth: 640)
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
         .allowsHitTesting(false)
@@ -155,8 +156,10 @@ struct MainView: View {
                 .accessibilityLabel("Send")
             }
         }
+        .frame(maxWidth: 640)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
         .background(.ultraThinMaterial)
     }
 
