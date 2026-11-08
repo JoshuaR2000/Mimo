@@ -28,15 +28,10 @@ struct CharacterStage: View {
         RealityView { content in
             content.add(stage.anchor)
             stage.install(controller.kind, palette: controller.palette)
-            #if os(visionOS)
-            stage.anchor.scale = [0.3, 0.3, 0.3]
-            stage.anchor.position = [0, -0.35, 0]
-            #else
             let camera = PerspectiveCamera()
             camera.camera.fieldOfViewInDegrees = 30
             camera.look(at: [0, 0.62, 0], from: [0, 1.0, 7.6], relativeTo: nil)
             content.add(camera)
-            #endif
 
             let sun = DirectionalLight()
             sun.light.intensity = 2600

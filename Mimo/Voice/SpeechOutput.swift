@@ -44,7 +44,7 @@ final class SpeechOutput {
     /// Plays audio and returns its duration in seconds.
     func play(_ data: Data) throws -> TimeInterval {
         stop()
-        #if os(iOS) || os(visionOS)
+        #if os(iOS)
         try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
         try? AVAudioSession.sharedInstance().setActive(true)
         #endif

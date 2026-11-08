@@ -2,7 +2,7 @@
 
 Mimo is an AI assistant with a face. Instead of a chat window, you talk to an animated 3D character that listens, thinks, answers out loud, and reacts with facial expressions and body language. It can also act for you: set reminders, add calendar events, take notes, start timers, check the weather, search the web, and open Maps.
 
-Built with SwiftUI and RealityKit for **iPhone, iPad, Mac, and Apple Vision Pro**.
+Built with SwiftUI and RealityKit for **iPhone, iPad, and Mac**.
 
 ## Characters
 
@@ -44,7 +44,7 @@ CharacterController (mood, gesture) ──► BipedRig (RealityKit, 60 fps)
 ## Running it
 
 1. Open `Mimo.xcodeproj` in Xcode 26 or later.
-2. Choose an iPhone, iPad, Mac, or Vision Pro destination and press Run.
+2. Choose an iPhone, iPad, or Mac destination and press Run.
 3. On first launch, pick a character, enter your name, and paste an OpenAI API key from [platform.openai.com](https://platform.openai.com). You can skip the key and use offline mode.
 
 The model can be changed in Settings (default: `gpt-5-mini`).

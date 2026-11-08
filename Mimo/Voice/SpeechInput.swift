@@ -42,7 +42,7 @@ final class SpeechInput {
         guard let recognizer, recognizer.isAvailable else { throw BrainError(message: "Speech recognition isn't available right now.") }
         if cancelPending { cancelPending = false; return }
 
-        #if os(iOS) || os(visionOS)
+        #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothA2DP])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
