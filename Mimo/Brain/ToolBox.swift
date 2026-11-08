@@ -131,7 +131,9 @@ final class ToolBox {
         let (geoData, _) = try await URLSession.shared.data(from: geoURL)
         guard let place = ((try JSONSerialization.jsonObject(with: geoData) as? [String: Any])?["results"] as? [[String: Any]])?.first,
               let lat = place["latitude"] as? Double, let lon = place["longitude"] as? Double else { return "Couldn't find a place called \(city)." }
-        let url = URL(string: "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&current=temperature_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1")!
+        let us = Locale.current.measurementSystem == .us
+        let units = us ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : ""
+        let url = URL(string: "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&current=temperature_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1\(units)")!
         let (data, _) = try await URLSession.shared.data(from: url)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
         let current = json["current"] as? [String: Any] ?? [:]
@@ -142,7 +144,8 @@ final class ToolBox {
         let high = (daily["temperature_2m_max"] as? [Double])?.first ?? .nan
         let low = (daily["temperature_2m_min"] as? [Double])?.first ?? .nan
         let name = [place["name"] as? String, place["country"] as? String].compactMap { $0 }.joined(separator: ", ")
-        return "\(name): \(Self.describe(code)), \(Int(temp.rounded()))°C now, high \(Int(high.rounded()))°C, low \(Int(low.rounded()))°C, wind \(Int(wind.rounded())) km/h."
+        let deg = us ? "°F" : "°C", speed = us ? "mph" : "km/h"
+        return "\(name): \(Self.describe(code)), \(Int(temp.rounded()))\(deg) now, high \(Int(high.rounded()))\(deg), low \(Int(low.rounded()))\(deg), wind \(Int(wind.rounded())) \(speed)."
     }
 
     private static func describe(_ code: Int) -> String {
