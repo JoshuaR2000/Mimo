@@ -83,6 +83,7 @@ final class BipedRig {
 
     // Animation state
     private var face = Face()
+    private var glance: SIMD2<Float> = .zero, glanceTarget: SIMD2<Float> = .zero, glanceIn: Float = 2
     private var time: Float = 0
     private var blink: Float = 0, blinkIn: Float = 1.5, blinkT: Float = -1
     private var gesture: CharacterGesture?, gestureT: Float = 0, seenToken = -1
@@ -190,8 +191,11 @@ final class BipedRig {
             let ankle = Entity(); ankle.position = [0, -0.47, 0]; knee.addChild(ankle)
             switch kind {
             case .alien:
+                part(hip, [0.05, 0.05, 0.052])
                 part(hip, [0.058, 0.26, 0.062], at: [0, -0.22, 0])
+                part(knee, [0.04, 0.04, 0.043])
                 part(knee, [0.048, 0.25, 0.052], at: [0, -0.22, 0])
+                part(ankle, [0.034, 0.05, 0.036], at: [0, 0.035, 0])
                 part(ankle, [0.05, 0.03, 0.05])
                 for spread in [Float(-0.5), 0, 0.5] {
                     let toe = Entity(); toe.orientation = euler(0, spread, 0); ankle.addChild(toe)
@@ -204,8 +208,10 @@ final class BipedRig {
                 _ = box(knee, [0.13, 0.38, 0.14], corner: 0.05, at: [0, -0.22, 0])
                 _ = box(ankle, [0.16, 0.08, 0.26], corner: 0.035, at: [0, 0.0, 0.04], role: .primaryShade)
             case .human:
+                part(hip, [0.068, 0.068, 0.072], role: .fixed, material: pants)
                 part(hip, [0.075, 0.26, 0.08], at: [0, -0.22, 0], role: .fixed, material: pants)
                 part(knee, [0.062, 0.25, 0.068], at: [0, -0.22, 0], role: .fixed, material: pants)
+                part(ankle, [0.036, 0.05, 0.04], at: [0, 0.04, 0], role: .fixed, material: pants)
                 part(ankle, [0.07, 0.05, 0.13], at: [0, 0.01, 0.04], role: .fixed, material: shoe)
                 part(ankle, [0.072, 0.012, 0.135], at: [0, -0.03, 0.04], role: .fixed, material: Mat.pbr(0xF2F2F2, roughness: 0.6))
             }
@@ -218,6 +224,8 @@ final class BipedRig {
             part(torso, [0.115, 0.13, 0.085], at: [0, 0.08, 0])
             part(torso, [0.105, 0.22, 0.08], at: [0, 0.28, 0])
             part(torso, [0.135, 0.17, 0.088], at: [0, 0.45, 0])
+            part(torso, [0.11, 0.1, 0.082], at: [0, 0.17, 0])
+            part(torso, [0.118, 0.1, 0.083], at: [0, 0.36, 0])
         case .robot:
             _ = box(torso, [0.26, 0.16, 0.2], corner: 0.05, at: [0, 0.08, 0], role: .secondary)
             _ = box(torso, [0.42, 0.46, 0.26], corner: 0.1, at: [0, 0.38, 0])
@@ -228,6 +236,7 @@ final class BipedRig {
         case .human:
             part(torso, [0.14, 0.11, 0.1], at: [0, 0.07, 0], role: .fixed, material: Mat.pbr(0x2E3550, roughness: 0.8))
             part(torso, [0.165, 0.27, 0.11], at: [0, 0.36, 0], role: .secondary)
+            part(torso, [0.11, 0.09, 0.088], at: [0, 0.15, 0], role: .secondary)
             part(torso, [0.11, 0.04, 0.08], at: [0, 0.58, 0.0], role: .secondary)
         }
     }
@@ -241,7 +250,9 @@ final class BipedRig {
             case .alien:
                 part(shoulder, [0.042, 0.042, 0.042])
                 part(shoulder, [0.04, 0.21, 0.043], at: [0, -0.19, 0])
+                part(elbow, [0.03, 0.03, 0.032])
                 part(elbow, [0.036, 0.2, 0.038], at: [0, -0.18, 0])
+                part(wrist, [0.024, 0.024, 0.022])
                 part(wrist, [0.04, 0.05, 0.022], at: [0, -0.035, 0])
                 for (i, dx) in [Float(-0.024), 0, 0.024].enumerated() {
                     let finger = Entity(); finger.position = [dx, -0.07, 0]; finger.orientation = euler(0, 0, (Float(i) - 1) * 0.18); wrist.addChild(finger)
@@ -260,9 +271,11 @@ final class BipedRig {
                     _ = box(wrist, [0.025, 0.07, 0.03], corner: 0.012, at: [dx, -0.12, 0], role: .secondary)
                 }
             case .human:
-                part(shoulder, [0.06, 0.06, 0.06], role: .secondary)
+                part(shoulder, [0.055, 0.055, 0.055], role: .secondary)
                 part(shoulder, [0.05, 0.2, 0.052], at: [0, -0.18, 0], role: .secondary)
+                part(elbow, [0.032, 0.032, 0.034])
                 part(elbow, [0.038, 0.19, 0.04], at: [0, -0.18, 0])
+                part(wrist, [0.025, 0.025, 0.022])
                 part(wrist, [0.045, 0.055, 0.026], at: [0, -0.04, 0])
                 for (i, dx) in [Float(-0.027), -0.009, 0.009, 0.027].enumerated() {
                     let finger = Entity(); finger.position = [dx, -0.085, 0]; finger.orientation = euler(0, 0, (Float(i) - 1.5) * 0.06); wrist.addChild(finger)
@@ -465,12 +478,21 @@ final class BipedRig {
         // Body
         let laughBob: Float = c.mood == .laughing ? abs(sin(t * 9)) * 0.04 : 0
         root.position.y = jumpY + laughBob
+        let weight = sin(t * 0.45) * 0.012
+        root.position.x = weight
         root.scale = [1 + squash * 0.6, 1 - squash, 1 + squash * 0.6]
         root.orientation = simd_quatf(angle: c.yaw, axis: [0, 1, 0])
-        torso.orientation = euler(0, 0, sin(t * 0.9) * 0.02 - face.tilt * 0.2)
+        torso.orientation = euler(0, 0, sin(t * 0.9) * 0.02 - face.tilt * 0.2 - weight * 2.5)
         torso.scale = [1, 1 + sin(t * 2.2) * 0.01, 1]
         for (i, hip) in hips.enumerated() { hip.orientation = euler(0, 0, (i == 0 ? -1 : 1) * 0.02 + sin(t * 0.9) * 0.01) }
-        head.orientation = euler(face.pitch + nod, shake, -face.tilt - gTilt + sin(t * 0.7) * 0.02)
+        glanceIn -= dt
+        if glanceIn <= 0 {
+            let calm = (c.mood == .neutral || c.mood == .happy) && !c.speaking
+            glanceTarget = calm && Float.random(in: 0...1) < 0.6 ? [Float.random(in: -0.35...0.35), Float.random(in: -0.12...0.08)] : .zero
+            glanceIn = Float.random(in: 1.8...5)
+        }
+        glance += (glanceTarget - glance) * (1 - exp(-dt * 4))
+        head.orientation = euler(face.pitch + nod + glance.y, shake + glance.x, -face.tilt - gTilt + sin(t * 0.7) * 0.02)
 
         // Eyes: lids close from the top; a happy squint narrows the eye from below
         let open = max(0.05, min(1.3, face.eyeOpen * (1 - blink)))
