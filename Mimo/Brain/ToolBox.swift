@@ -13,10 +13,34 @@ final class ToolBox {
     private let memory: MemoryStore
     private let events = EKEventStore()
     private let onSwitchCharacter: (CharacterKind) -> Void
+    /// Reports what's happening right now (nil when done), for the status pill.
+    var onActivity: (String?) -> Void = { _ in }
+    /// Reports a visual result card for something that just happened.
+    var onCard: (ResultCard) -> Void = { _ in }
 
     init(memory: MemoryStore, onSwitchCharacter: @escaping (CharacterKind) -> Void = { _ in }) {
         self.memory = memory
         self.onSwitchCharacter = onSwitchCharacter
+    }
+
+    /// Reverses something the assistant did, from a card's Undo button.
+    func undo(_ card: ResultCard) async -> Bool {
+        switch card {
+        case .reminder(let id, _, _):
+            guard let r = events.calendarItem(withIdentifier: id) as? EKReminder else { return false }
+            return (try? events.remove(r, commit: true)) != nil
+        case .event(let id, _, _, _):
+            guard let e = events.event(withIdentifier: id) else { return false }
+            return (try? events.remove(e, span: .thisEvent, commit: true)) != nil
+        case .timer(let id, _, _):
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
+            return true
+        case .note(let id, _):
+            if let note = memory.notes.first(where: { $0.id == id }) { memory.deleteNote(note) }
+            return true
+        case .agenda, .weather:
+            return false
+        }
     }
 
     // MARK: - Definitions sent to the model
@@ -52,6 +76,8 @@ final class ToolBox {
 
     func run(_ name: String, arguments: String) async -> String {
         let args = (try? JSONSerialization.jsonObject(with: Data(arguments.utf8))) as? [String: Any] ?? [:]
+        onActivity(Self.activity(for: name))
+        defer { onActivity(nil) }
         do {
             switch name {
             case "set_reminder": return try await setReminder(title: args["title"] as? String ?? "Reminder", due: args["due"] as? String)
@@ -59,6 +85,7 @@ final class ToolBox {
             case "get_calendar_events": return try await listEvents(day: args["day"] as? String)
             case "save_note":
                 let note = memory.addNote(args["text"] as? String ?? "")
+                onCard(.note(id: note.id, text: note.text))
                 return "Saved note: \(note.text)"
             case "list_notes":
                 let notes = memory.notes.prefix(15).map { "- \($0.text) (\($0.created.formatted(date: .abbreviated, time: .omitted)))" }
@@ -92,6 +119,7 @@ final class ToolBox {
             reminder.addAlarm(EKAlarm(absoluteDate: date))
         }
         try events.save(reminder, commit: true)
+        onCard(.reminder(id: reminder.calendarItemIdentifier, title: title, due: due.flatMap(Self.parseDate)))
         return "Reminder created: \(title)" + (due.flatMap(Self.parseDate).map { " at \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")
     }
 
@@ -104,6 +132,7 @@ final class ToolBox {
         event.endDate = end.flatMap(Self.parseDate) ?? startDate.addingTimeInterval(3600)
         event.calendar = events.defaultCalendarForNewEvents
         try events.save(event, span: .thisEvent, commit: true)
+        onCard(.event(id: event.eventIdentifier ?? "", title: title, start: event.startDate, end: event.endDate))
         return "Event added: \(title) on \(startDate.formatted(date: .abbreviated, time: .shortened))"
     }
 
@@ -113,6 +142,9 @@ final class ToolBox {
         let start = Calendar.current.startOfDay(for: date)
         let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
         let found = events.events(matching: events.predicateForEvents(withStart: start, end: end, calendars: nil))
+        onCard(.agenda(day: start, items: found.map { e in
+            .init(title: e.title ?? "Event", time: e.isAllDay ? "All day" : "\(e.startDate.formatted(date: .omitted, time: .shortened)) – \(e.endDate.formatted(date: .omitted, time: .shortened))")
+        }))
         if found.isEmpty { return "No events on \(start.formatted(date: .complete, time: .omitted))." }
         return found.map { e in
             e.isAllDay ? "- \(e.title ?? "Event") (all day)" : "- \(e.title ?? "Event") at \(e.startDate.formatted(date: .omitted, time: .shortened))"
@@ -129,7 +161,9 @@ final class ToolBox {
         content.body = label ?? "Your timer has finished."
         content.sound = .default
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(max(1, seconds)), repeats: false)
-        try await center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger))
+        let id = UUID().uuidString
+        try await center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+        onCard(.timer(id: id, label: label ?? "Timer", ends: Date().addingTimeInterval(TimeInterval(max(1, seconds)))))
         return "Timer set for \(Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide)))."
     }
 
@@ -155,7 +189,23 @@ final class ToolBox {
         let low = (daily["temperature_2m_min"] as? [Double])?.first ?? .nan
         let name = [place["name"] as? String, place["country"] as? String].compactMap { $0 }.joined(separator: ", ")
         let deg = us ? "°F" : "°C", speed = us ? "mph" : "km/h"
+        onCard(.weather(place: place["name"] as? String ?? city, summary: Self.describe(code).capitalized, symbol: Self.symbol(code),
+                        temp: Int(temp.rounded()), high: Int(high.rounded()), low: Int(low.rounded()), unit: deg))
         return "\(name): \(Self.describe(code)), \(Int(temp.rounded()))\(deg) now, high \(Int(high.rounded()))\(deg), low \(Int(low.rounded()))\(deg), wind \(Int(wind.rounded())) \(speed)."
+    }
+
+    private static func symbol(_ code: Int) -> String {
+        switch code {
+        case 0: "sun.max.fill"
+        case 1, 2: "cloud.sun.fill"
+        case 3: "cloud.fill"
+        case 45, 48: "cloud.fog.fill"
+        case 51...57: "cloud.drizzle.fill"
+        case 61...67, 80...82: "cloud.rain.fill"
+        case 71...77, 85, 86: "cloud.snow.fill"
+        case 95...99: "cloud.bolt.rain.fill"
+        default: "cloud.sun.fill"
+        }
     }
 
     private static func describe(_ code: Int) -> String {

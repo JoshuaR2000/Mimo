@@ -34,7 +34,7 @@ struct CharacterStage: View {
             #else
             let camera = PerspectiveCamera()
             camera.camera.fieldOfViewInDegrees = 30
-            camera.look(at: [0, 1.05, 0], from: [0, 1.25, 6.4], relativeTo: nil)
+            camera.look(at: [0, 0.62, 0], from: [0, 1.0, 7.6], relativeTo: nil)
             content.add(camera)
             #endif
 

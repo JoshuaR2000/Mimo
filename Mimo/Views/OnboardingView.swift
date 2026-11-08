@@ -23,7 +23,7 @@ struct OnboardingView: View {
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28))
             .padding(16)
         }
-        .background(LinearGradient(colors: app.character.backgroundColors, startPoint: .top, endPoint: .bottom).ignoresSafeArea())
+        .background(WorldBackground(kind: app.character))
         .preferredColorScheme(.dark)
         .animation(.easeInOut(duration: 0.25), value: step)
         .onAppear { app.controller.mood = .happy; app.controller.perform(.wave) }

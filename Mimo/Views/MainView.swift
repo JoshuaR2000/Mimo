@@ -1,15 +1,18 @@
 import SwiftUI
 
-/// The main screen: the character, what it's saying, and ways to talk to it.
+/// The main screen: the character in its world, what it's saying, and the big mic button.
 struct MainView: View {
     let app: AppState
     @State private var conversation: Conversation
     @State private var input = ""
+    @State private var typing = false
     @State private var showSettings = false
     @State private var showHistory = false
     @FocusState private var inputFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let pending = PendingRequests.shared
+
+    private static let suggestions = ["Plan my day", "What's the weather?", "Set a reminder", "Tell me a joke"]
 
     init(app: AppState) {
         self.app = app
@@ -17,19 +20,24 @@ struct MainView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            topBar
-            ZStack(alignment: .bottom) {
-                CharacterStage(controller: app.controller)
-                captionView
+        ZStack {
+            WorldBackground(kind: app.character)
+            VStack(spacing: 0) {
+                topBar
+                ZStack(alignment: .bottom) {
+                    // The character steps back (smaller, toward the top) to make room for result cards.
+                    CharacterStage(controller: app.controller)
+                        .scaleEffect(showingCards ? 0.62 : 1, anchor: .top)
+                        .animation(reduceMotion ? nil : .spring(duration: 0.45), value: showingCards)
+                    conversationArea
+                }
+                if app.showPlayground { playground }
+                dock
             }
-            if app.showPlayground { playground }
-            inputBar
         }
-        .background(LinearGradient(colors: app.character.backgroundColors, startPoint: .top, endPoint: .bottom).ignoresSafeArea())
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showSettings, onDismiss: conversation.refreshBrain) { SettingsView(app: app, conversation: conversation) }
-        .sheet(isPresented: $showHistory) { HistoryView(lines: conversation.history) }
+        .sheet(isPresented: $showHistory) { HistoryView(lines: conversation.history, character: app.character) }
         .onAppear {
             app.controller.reduceMotion = reduceMotion
             NotificationRelay.shared.onDeliver = { [conversation] text in
@@ -51,7 +59,7 @@ struct MainView: View {
     // MARK: Top bar
 
     private var topBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Menu {
                 ForEach(CharacterKind.allCases) { kind in
                     Button {
@@ -61,118 +69,143 @@ struct MainView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 6) {
-                    Text(app.character.displayName).font(.title2.bold())
-                    Image(systemName: "chevron.down").font(.caption.bold())
+                HStack(spacing: 8) {
+                    Circle().fill(app.character.accentColor).frame(width: 24, height: 24)
+                    Text(app.character.displayName).font(Brand.display(.title3)).foregroundStyle(Brand.mist)
+                    Image(systemName: "chevron.down").font(.caption.bold()).foregroundStyle(Brand.lavender)
                 }
-                .foregroundStyle(.white)
+                .padding(.leading, 8).padding(.trailing, 14).frame(height: 40)
+                .background(Brand.deep, in: Capsule())
+                .overlay(Capsule().stroke(Brand.outline, lineWidth: 1))
             }
-            .accessibilityLabel("Change character")
+            .accessibilityLabel("Character: \(app.character.displayName). Change character")
             if !app.hasAPIKey {
-                Text("Offline").font(.caption.bold()).padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(.orange.opacity(0.25), in: Capsule()).foregroundStyle(.orange)
+                Text("Offline").font(.caption.bold()).padding(.horizontal, 10).frame(height: 26)
+                    .background(Color.orange.opacity(0.2), in: Capsule()).foregroundStyle(.orange)
             }
             Spacer()
-            Button { showHistory = true } label: { Image(systemName: "text.bubble") }
-                .accessibilityLabel("Conversation history")
-            Button { showSettings = true } label: { Image(systemName: "gearshape") }
-                .accessibilityLabel("Settings")
+            CircleIconButton(systemName: "bubble.left.and.text.bubble.right", label: "Conversation history") { showHistory = true }
+            CircleIconButton(systemName: "gearshape", label: "Settings") { showSettings = true }
         }
-        .font(.title3)
-        .foregroundStyle(.white.opacity(0.9))
         .padding(.horizontal, 20)
-        .padding(.top, 8)
+        .padding(.top, 6)
     }
 
-    // MARK: Caption
+    // MARK: Conversation area: what you said, what it's doing, what it says, what it did
 
-    private var captionView: some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private var conversationArea: some View {
+        VStack(spacing: 12) {
             if let error = conversation.errorMessage {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.footnote).foregroundStyle(.orange)
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(Brand.deep, in: RoundedRectangle(cornerRadius: 14))
             }
             if let error = conversation.listener.lastError, !app.hasAPIKey {
-                Label(error, systemImage: "mic.slash.fill")
-                    .font(.footnote).foregroundStyle(.orange)
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                Label(error, systemImage: "mic.slash.fill").font(.footnote).foregroundStyle(.orange)
             }
+
             if conversation.listener.isActive {
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text(conversation.listener.transcript.isEmpty ? "Listening… start talking" : conversation.listener.transcript)
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    MicLevelBar(level: conversation.listener.level)
+                UserBubble(text: conversation.listener.transcript.isEmpty ? "Listening…" : conversation.listener.transcript)
+            } else if conversation.isThinking {
+                if let said = conversation.lastUserMessage { UserBubble(text: said) }
+                StatusPill(text: conversation.activity ?? "Thinking", accent: app.character.accentColor)
+            } else if !conversation.caption.isEmpty {
+                SpeechBubble(name: app.character.displayName, accent: app.character.accentColor, text: conversation.caption)
+                if !conversation.cards.isEmpty && !conversation.isSpeaking {
+                    VStack(spacing: 12) {
+                        ForEach(conversation.cards.suffix(2)) { card in
+                            ResultCardView(card: card, accent: app.character.accentColor) { conversation.undo(card) }
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
             }
-            if conversation.isThinking {
-                HStack(spacing: 8) { ProgressView(); Text("Thinking…").foregroundStyle(.secondary) }
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-            } else if !conversation.caption.isEmpty && !conversation.listener.isActive {
-                Text(conversation.caption)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    .accessibilityLabel("\(app.character.displayName) says: \(conversation.caption)")
+            if showSuggestions {
+                SuggestionChips(suggestions: Self.suggestions) { conversation.send($0) }
+                    .padding(.horizontal, -20)
             }
         }
-        .frame(maxWidth: 640)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
-        .allowsHitTesting(false)
-        .animation(.easeOut(duration: 0.2), value: conversation.isThinking)
+        .frame(maxWidth: 560)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
+        .animation(reduceMotion ? nil : .spring(duration: 0.35), value: conversation.cards)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: conversation.isThinking)
     }
 
-    // MARK: Input
+    private var showingCards: Bool {
+        !conversation.cards.isEmpty && !conversation.isThinking && !conversation.listener.isActive
+    }
 
-    private var inputBar: some View {
-        HStack(spacing: 10) {
-            TextField("Message \(app.character.displayName)…", text: $input)
-                .submitLabel(.send)
-                .focused($inputFocused)
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 20))
-                .onSubmit(send)
-            if input.isEmpty {
-                Button(action: conversation.toggleListening) {
-                    Image(systemName: conversation.listener.isActive ? "stop.fill" : "mic.fill")
-                        .font(.title3)
-                        .frame(width: 46, height: 46)
-                        .background(conversation.listener.isActive ? Color.red : Color.accentColor, in: Circle())
-                        .foregroundStyle(.white)
+    private var showSuggestions: Bool {
+        conversation.lastUserMessage == nil && !conversation.isThinking && !conversation.listener.isActive && !typing
+    }
+
+    // MARK: Dock: keyboard, the hero mic, switch character
+
+    private var micState: MicState {
+        if conversation.listener.isActive { return .listening }
+        if conversation.isThinking { return .thinking }
+        if conversation.isSpeaking { return .speaking }
+        return .idle
+    }
+
+    private var dock: some View {
+        VStack(spacing: 12) {
+            if typing {
+                HStack(spacing: 10) {
+                    TextField("Message \(app.character.displayName)…", text: $input)
+                        .submitLabel(.send)
+                        .focused($inputFocused)
+                        .padding(.horizontal, 16).frame(minHeight: 48)
+                        .background(Brand.deep, in: Capsule())
+                        .overlay(Capsule().stroke(Brand.outline, lineWidth: 1))
+                        .onSubmit(send)
+                    Button(action: send) {
+                        Image(systemName: "arrow.up").font(.title3.bold()).foregroundStyle(.white)
+                            .frame(width: 48, height: 48).background(Brand.violet, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .accessibilityLabel("Send")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(conversation.listener.isActive ? "Stop listening and send" : "Talk to \(app.character.displayName)")
-                .accessibilityHint(conversation.listener.isActive ? "Sends what you said." : "Starts listening to your voice.")
-            } else {
-                Button(action: send) {
-                    Image(systemName: "arrow.up").font(.title3.bold())
-                        .frame(width: 46, height: 46)
-                        .background(Color.accentColor, in: Circle())
-                        .foregroundStyle(.white)
+                .frame(maxWidth: 560)
+                .padding(.horizontal, 20)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            HStack(spacing: 32) {
+                CircleIconButton(systemName: typing ? "mic" : "keyboard", label: typing ? "Use voice" : "Type a message", size: 52) {
+                    withAnimation(.spring(duration: 0.3)) { typing.toggle() }
+                    inputFocused = typing
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Send")
+                MicButton(state: micState, level: micLevel, accent: app.character.accentColor, action: micTapped)
+                CircleIconButton(systemName: "arrow.left.arrow.right", label: "Switch to \(nextCharacter.displayName)", size: 52) {
+                    app.character = nextCharacter
+                }
             }
         }
-        .frame(maxWidth: 640)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial)
+        .padding(.bottom, 8)
+    }
+
+    private var nextCharacter: CharacterKind {
+        let all = CharacterKind.allCases
+        return all[(all.firstIndex(of: app.character)! + 1) % all.count]
+    }
+
+    private var micLevel: Float {
+        conversation.listener.isActive ? conversation.listener.level : 0
+    }
+
+    private func micTapped() {
+        switch micState {
+        case .thinking, .speaking: conversation.interrupt()
+        case .idle, .listening: conversation.toggleListening()
+        }
     }
 
     private func send() {
         let text = input
         input = ""
-        inputFocused = false
         conversation.send(text)
     }
 
@@ -185,7 +218,7 @@ struct MainView: View {
                     ForEach(Mood.allCases) { mood in
                         Button(mood.label) { app.controller.mood = mood }
                             .buttonStyle(.bordered).controlSize(.small)
-                            .tint(app.controller.mood == mood ? .accentColor : .gray)
+                            .tint(app.controller.mood == mood ? Brand.violet : .gray)
                     }
                 }
             }
@@ -198,51 +231,49 @@ struct MainView: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 20)
         .padding(.vertical, 8)
     }
 }
 
-/// The full conversation as text.
+/// The full conversation as chat bubbles.
 struct HistoryView: View {
     let lines: [ChatLine]
+    let character: CharacterKind
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             Group {
                 if lines.isEmpty {
-                    ContentUnavailableView("No messages yet", systemImage: "text.bubble", description: Text("What you and your assistant say appears here."))
+                    ContentUnavailableView("No messages yet", systemImage: "bubble.left.and.text.bubble.right",
+                                           description: Text("What you and your assistant say appears here."))
                 } else {
-                    List(lines) { line in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(line.speaker == .user ? "You" : "Assistant").font(.caption).foregroundStyle(.secondary)
-                            Text(line.text)
+                    ScrollView {
+                        LazyVStack(spacing: 10) {
+                            ForEach(lines) { line in
+                                if line.speaker == .user {
+                                    UserBubble(text: line.text)
+                                } else {
+                                    Text(line.text)
+                                        .font(.callout).foregroundStyle(Brand.mist)
+                                        .padding(.horizontal, 16).padding(.vertical, 11)
+                                        .background(Brand.dusk, in: UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: 6, bottomTrailingRadius: 20, topTrailingRadius: 20))
+                                        .frame(maxWidth: 300, alignment: .leading)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .accessibilityLabel("Assistant said: \(line.text)")
+                                }
+                            }
                         }
+                        .padding(20)
                     }
+                    .defaultScrollAnchor(.bottom)
                 }
             }
+            .background(Brand.night)
             .navigationTitle("Conversation")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
-    }
-}
-
-/// A small bar that moves with microphone volume, so it's obvious whether sound is getting through.
-struct MicLevelBar: View {
-    let level: Float
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.15))
-                Capsule().fill(level > 0.05 ? Color.green : Color.gray)
-                    .frame(width: max(6, geo.size.width * CGFloat(level)))
-                    .animation(.linear(duration: 0.08), value: level)
-            }
-        }
-        .frame(width: 140, height: 6)
-        .accessibilityLabel("Microphone level")
-        .accessibilityValue("\(Int(level * 100)) percent")
+        .preferredColorScheme(.dark)
     }
 }

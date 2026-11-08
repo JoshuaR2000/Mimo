@@ -38,6 +38,15 @@ final class Conversation {
         didSet { HistoryStore.save(history) }
     }
     private(set) var isThinking = false
+    /// True while the character is talking (text revealing or audio playing).
+    private(set) var isSpeaking = false
+    /// What the assistant is doing right now, e.g. "Checking your calendar".
+    private(set) var activity: String?
+    /// Cards for what the assistant did during the latest reply.
+    private(set) var cards: [ResultCard] = []
+    /// The latest thing the user said, shown while the assistant works on it.
+    private(set) var lastUserMessage: String?
+    @ObservationIgnored private var tools: ToolBox?
     var errorMessage: String?
 
     let listener = SpeechInput()
@@ -66,6 +75,9 @@ final class Conversation {
         if app.hasAPIKey {
             let app = app
             let tools = ToolBox(memory: app.memory) { [weak self] kind in self?.pendingSwitch = kind }
+            tools.onActivity = { [weak self] text in self?.activity = text }
+            tools.onCard = { [weak self] card in self?.cards.append(card) }
+            self.tools = tools
             brain = OpenAIBrain(apiKey: app.apiKey, model: app.model, tools: tools) {
                 makeInstructions(character: app.character, userName: app.userName, memory: app.memory)
             }
@@ -91,6 +103,8 @@ final class Conversation {
         // Recent turns give the brain context after a relaunch or a character switch.
         let context = Array(history.suffix(12))
         history.append(ChatLine(speaker: .user, text: message))
+        lastUserMessage = message
+        cards = []
         errorMessage = nil
         turn = Task {
             isThinking = true
@@ -127,6 +141,21 @@ final class Conversation {
         voice.stop()
         app.controller.speaking = false
         isThinking = false
+        isSpeaking = false
+        activity = nil
+    }
+
+    /// Reverses what a result card describes, then removes the card.
+    func undo(_ card: ResultCard) {
+        Task {
+            if await tools?.undo(card) == true {
+                cards.removeAll { $0.id == card.id }
+                app.controller.mood = .neutral
+                perform(AssistantReply(text: "Okay, I undid that.", mood: .neutral, gesture: .nod), speakAloud: false, record: false)
+            } else {
+                errorMessage = "Couldn't undo that. It may already be gone."
+            }
+        }
     }
 
     func toggleListening() {
@@ -175,6 +204,8 @@ final class Conversation {
 
     func clearConversation() {
         interrupt()
+        cards = []
+        lastUserMessage = nil
         history = []
         caption = ""
         brain.reset()
@@ -219,6 +250,8 @@ final class Conversation {
         }
 
         // Reveal the caption at about the pace people speak; the mouth flaps until audio takes over.
+        isSpeaking = true
+        defer { isSpeaking = false }
         controller.speaking = true
         caption = ""
         for ch in reply.text {

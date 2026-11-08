@@ -103,9 +103,9 @@ enum CharacterKind: String, CaseIterable, Identifiable, Codable {
     /// Glow color of the floor ring.
     var accent: UInt32 {
         switch self {
-        case .alien: 0x6FF3FF
-        case .robot: 0x7DFF9A
-        case .human: 0xFFB36B
+        case .alien: 0xB5D33D
+        case .robot: 0x4FE3F0
+        case .human: 0xFF8A6B
         }
     }
 }
