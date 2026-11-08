@@ -92,7 +92,21 @@ final class OpenAIBrain: AssistantBrain {
             if text.isEmpty { throw BrainError(message: "OpenAI sent an empty reply.") }
             return AssistantReply(text: text, mood: .neutral, gesture: nil)
         }
-        return AssistantReply(text: raw.reply, mood: Mood(rawValue: raw.mood) ?? .neutral, gesture: CharacterGesture(rawValue: raw.gesture))
+        return AssistantReply(text: Self.speakable(raw.reply), mood: Mood(rawValue: raw.mood) ?? .neutral, gesture: CharacterGesture(rawValue: raw.gesture))
+    }
+
+    /// Removes links and citation markup, which look messy in captions and sound wrong when spoken.
+    static func speakable(_ text: String) -> String {
+        var t = text
+        // "([site](https://…))" citations → removed entirely
+        t = t.replacingOccurrences(of: #"\s*\(\[[^\]]*\]\([^)]*\)\)"#, with: "", options: .regularExpression)
+        // "[label](https://…)" → "label"
+        t = t.replacingOccurrences(of: #"\[([^\]]*)\]\([^)]*\)"#, with: "$1", options: .regularExpression)
+        // bare URLs → removed
+        t = t.replacingOccurrences(of: #"\s*\(?https?://\S+\)?"#, with: "", options: .regularExpression)
+        t = t.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+        t = t.replacingOccurrences(of: #"\s+([.,!?])"#, with: "$1", options: .regularExpression)
+        return t.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static let replyFormat: [String: Any] = [
@@ -124,7 +138,7 @@ func makeInstructions(character: CharacterKind, userName: String, memory: Memory
     You live inside the Mimo app as an animated 3D character on \(who)'s device, and you talk with them out loud.
 
     How to reply:
-    - Your reply is spoken aloud, so keep it short and natural: usually one to three sentences. No markdown, lists, emoji or URLs unless asked.
+    - Your reply is spoken aloud, so keep it short and natural: usually one to three sentences. No markdown, lists, emoji, links, URLs or source citations. If a source matters, name it in words ("according to Reuters").
     - Pick the mood that matches what you say, and a gesture only when it fits (wave for greetings, nod for agreeing, shrug when unsure, jump for excitement). Otherwise use "none".
     - Use the tools when \(who) asks you to do something (reminders, calendar, notes, timers, weather, maps), and web search for anything current or that you're unsure of.
     - Only say an action is done after the tool result confirms it. If a tool fails, say what went wrong plainly.
