@@ -1,0 +1,365 @@
+<title>Lion Style Lineup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: a toolbar to drive every character at once, then a grid of five style cards. */
+:root {
+  --bg: #EEF1F4; --surface: #FFFFFF; --ink: #18202B; --muted: #5B6676; --line: #D9DFE7;
+  --accent: #3355D1; --accent-ink: #FFFFFF; --chip: #E4E9F2;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg:#0F141C; --surface:#18202B; --ink:#E8ECF2; --muted:#98A3B4; --line:#2A3442; --accent:#8EA6FF; --accent-ink:#0F141C; --chip:#222C3A; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg:#0F141C; --surface:#18202B; --ink:#E8ECF2; --muted:#98A3B4; --line:#2A3442; --accent:#8EA6FF; --accent-ink:#0F141C; --chip:#222C3A; color-scheme: dark; }
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 40px;
+}
+.wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: grid; gap: 4px; }
+.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+h1 { font-family: var(--font-display); font-size: clamp(28px, 4vw, 40px); line-height: 1.1; margin: 0; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); max-width: 66ch; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.toolbar span { color: var(--muted); font-size: 14px; margin-right: 4px; }
+button { font: inherit; cursor: pointer; border-radius: 10px; padding: 7px 12px; border: 1px solid transparent; background: var(--chip); color: var(--ink); }
+button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+.card .art { position: relative; aspect-ratio: 1; max-width: 100%; }
+.card canvas { display: block; width: 100%; height: 100%; }
+.card .tag { position: absolute; top: 12px; left: 12px; font-family: var(--font-mono); font-size: 12px; padding: 4px 10px; border-radius: 999px; background: rgba(10,14,22,0.66); color: #F4F6FA; }
+.card .body { padding: 16px; display: grid; gap: 8px; align-content: start; }
+.card h2 { font-family: var(--font-display); font-size: 20px; margin: 0; display: flex; gap: 10px; align-items: baseline; }
+.card h2 b { font-family: var(--font-mono); font-weight: 400; font-size: 13px; color: var(--muted); }
+.card p { margin: 0; }
+.card dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; }
+.card dt { color: var(--muted); font-weight: 700; }
+.card dd { margin: 0; }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Design options · same lion, five styles</span>
+    <h1>Lion Style Lineup</h1>
+    <p>Each card is the same character with the same expressions, drawn in a different style. Use the buttons to make all five show the same emotion side by side, or leave them cycling.</p>
+  </header>
+
+  <div class="toolbar" id="toolbar"><span>Show all:</span></div>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+(() => {
+"use strict";
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- expressions ---------- */
+const BASE = { browY:0, browTilt:0, browAsym:0, eyeOpen:1, eyeHappy:0, mouthCurve:0.35, mouthOpen:0, mouthRound:0, tilt:0, blush:0, lookX:0, lookY:0 };
+const EXPR = {
+  neutral:{}, happy:{ browY:-7, eyeHappy:0.9, mouthCurve:1, mouthOpen:0.3, tilt:0.06, blush:0.7 },
+  laughing:{ browY:-10, eyeHappy:1, mouthCurve:1, mouthOpen:0.85, tilt:-0.05, blush:0.9 },
+  sad:{ browY:-2, browTilt:-0.38, eyeOpen:0.78, mouthCurve:-0.85, tilt:-0.1, lookY:0.7 },
+  surprised:{ browY:-16, eyeOpen:1.25, mouthCurve:0, mouthOpen:0.75, mouthRound:1 },
+  thinking:{ browY:-3, browTilt:0.1, browAsym:-9, eyeOpen:0.92, mouthCurve:-0.15, tilt:0.13, lookX:0.8, lookY:-0.8 },
+  concerned:{ browY:5, browTilt:0.38, eyeOpen:0.85, mouthCurve:-0.6 },
+};
+for (const k in EXPR) EXPR[k] = Object.assign({}, BASE, EXPR[k]);
+const SEQ = [ ["happy",true], ["surprised",false], ["thinking",false], ["sad",false], ["laughing",true], ["concerned",false], ["neutral",true] ];
+
+/* ---------- shared vector features ---------- */
+const ell = (c,x,y,rx,ry) => { c.beginPath(); c.ellipse(x,y,Math.max(0.1,rx),Math.max(0.1,ry),0,0,Math.PI*2); };
+function eyes(c, s, R, o) {
+  const er = R*0.12, ex = R*0.36, ey = o.eyeY*R;
+  const open = Math.max(0.06, Math.min(1.3, s.eyeOpen*(1 - s.blink)));
+  for (const side of [-1,1]) {
+    const x = side*ex;
+    c.save(); c.globalAlpha = 1 - s.eyeHappy;
+    ell(c, x + s.lookX*er*0.25, ey + s.lookY*er*0.25, er*0.78, er*open);
+    if (o.eyeGrad) { const g = c.createRadialGradient(x-er*0.3, ey-er*0.4, er*0.1, x, ey, er); g.addColorStop(0, o.eyeGrad[0]); g.addColorStop(1, o.eyeGrad[1]); c.fillStyle = g; } else c.fillStyle = o.ink;
+    c.fill();
+    if (o.shine && open > 0.35) {
+      ell(c, x + s.lookX*er*0.25 - er*0.26, ey + s.lookY*er*0.25 - er*0.35*open, er*0.24, er*0.24); c.fillStyle = "rgba(255,255,255,0.92)"; c.fill();
+      ell(c, x + s.lookX*er*0.25 + er*0.25, ey + s.lookY*er*0.25 + er*0.3*open, er*0.1, er*0.1); c.fill();
+    }
+    c.globalAlpha = s.eyeHappy;
+    c.beginPath(); c.arc(x, ey + er*0.4, er*0.85, Math.PI*1.12, Math.PI*1.88);
+    c.lineCap = "round"; c.lineWidth = er*0.42; c.strokeStyle = o.ink; c.stroke();
+    c.restore();
+  }
+  // brows
+  const by = ey - er*1.35 - R*0.08;
+  for (const side of [-1,1]) {
+    c.save(); c.translate(side*ex, by + s.browY*R/100 + (side < 0 ? s.browAsym*R/100 : 0)); c.rotate(-side*s.browTilt);
+    c.beginPath(); c.moveTo(-R*0.12, R*0.01); c.quadraticCurveTo(0, -R*0.035, R*0.12, R*0.01);
+    c.lineCap = "round"; c.lineWidth = o.browW*R; c.strokeStyle = o.brow; c.stroke(); c.restore();
+  }
+}
+function nose(c, R, o) {
+  const ny = o.noseY*R;
+  c.beginPath(); c.moveTo(-R*0.11, ny-R*0.045); c.lineTo(R*0.11, ny-R*0.045); c.lineTo(0, ny+R*0.075); c.closePath();
+  c.lineJoin = "round"; c.lineWidth = R*0.05;
+  if (o.noseGrad) { const g = c.createLinearGradient(0, ny-R*0.05, 0, ny+R*0.08); g.addColorStop(0, o.noseGrad[0]); g.addColorStop(1, o.noseGrad[1]); c.fillStyle = g; c.strokeStyle = o.noseGrad[1]; }
+  else { c.fillStyle = o.nose; c.strokeStyle = o.nose; }
+  if (o.noseStrokeOnly) { c.stroke(); return; }
+  c.stroke(); c.fill();
+  if (o.noseGrad) { ell(c, -R*0.035, ny-R*0.02, R*0.035, R*0.015); c.fillStyle = "rgba(255,255,255,0.45)"; c.fill(); }
+}
+function mouth(c, s, R, o, flap) {
+  const my = o.mouthY*R, w = R*0.2*(1 - 0.5*s.mouthRound), cv = s.mouthCurve*R*0.1;
+  const op = Math.max(s.mouthOpen, flap)*R*0.22;
+  c.save(); c.translate(0, my); c.lineCap = "round"; c.lineJoin = "round"; c.strokeStyle = o.mouth; c.lineWidth = o.mouthW*R;
+  if (op < 1.5) { c.beginPath(); c.moveTo(-w, -cv); c.quadraticCurveTo(0, cv, w, -cv); c.stroke(); }
+  else {
+    c.beginPath(); c.moveTo(-w, -cv); c.quadraticCurveTo(0, cv*0.9 - op*(0.15 + 0.9*s.mouthRound), w, -cv);
+    c.quadraticCurveTo(0, cv + op*1.6, -w, -cv); c.closePath();
+    if (o.mouthFill) { c.fillStyle = o.mouthFill; c.fill(); }
+    if (o.tongue) { c.save(); c.clip(); ell(c, 0, cv + op*1.05, w*0.6, op*0.55); c.fillStyle = o.tongue; c.fill(); c.restore(); }
+    c.lineWidth = o.mouthW*R*0.8; c.stroke();
+  }
+  c.restore();
+}
+const talkFlap = (s, t) => s.talking ? 0.18 + 0.5*Math.abs(Math.sin(t*15))*(0.65 + 0.35*Math.sin(t*4.7)) : 0;
+
+/* ---------- A: Soft Clay ---------- */
+function rg(c, x, y, r, a, b) { const g = c.createRadialGradient(x - r*0.35, y - r*0.4, r*0.08, x, y, r*1.05); g.addColorStop(0, a); g.addColorStop(1, b); return g; }
+function drawClay(c, s, t) {
+  const bg = c.createLinearGradient(0,0,0,300); bg.addColorStop(0,"#FBE6CF"); bg.addColorStop(1,"#F1C9A4"); c.fillStyle = bg; c.fillRect(0,0,300,300);
+  const R = 72, bob = Math.sin(t*2.1)*3*!reduceMotion;
+  const sh = c.createRadialGradient(150,268,4,150,268,90); sh.addColorStop(0,"rgba(120,60,20,0.28)"); sh.addColorStop(1,"rgba(120,60,20,0)");
+  c.fillStyle = sh; c.fillRect(40,240,220,60);
+  c.save(); c.translate(150, 145 + bob); c.rotate(s.tilt + Math.sin(t*0.7)*0.02);
+  for (let i = 0; i < 14; i++) { const a = i/14*Math.PI*2, x = Math.cos(a)*R*0.98, y = Math.sin(a)*R*0.95 + R*0.04, r = R*0.4;
+    ell(c, x, y, r, r); c.fillStyle = rg(c, x, y, r, "#D98A44", "#93491A"); c.fill(); }
+  for (const side of [-1,1]) { const x = side*R*0.68, y = -R*0.68;
+    ell(c, x, y, R*0.27, R*0.27); c.fillStyle = rg(c, x, y, R*0.27, "#F6C47A", "#C88733"); c.fill();
+    ell(c, x, y + R*0.02, R*0.14, R*0.14); c.fillStyle = rg(c, x, y, R*0.14, "#FBE0B6", "#E5B37A"); c.fill(); }
+  ell(c, 0, 0, R, R*0.95); c.fillStyle = rg(c, 0, -R*0.05, R, "#FDD58C", "#D79539"); c.fill();
+  for (const side of [-1,1]) { const x = side*R*0.21, y = R*0.38; ell(c, x, y, R*0.27, R*0.24); c.fillStyle = rg(c, x, y, R*0.27, "#FFF6E4", "#EDC995"); c.fill(); }
+  if (s.blush > 0.02) for (const side of [-1,1]) { ell(c, side*R*0.6, R*0.22, R*0.14, R*0.08); c.fillStyle = `rgba(240,110,110,${0.45*s.blush})`; c.fill(); }
+  const o = { eyeY:-0.08, ink:"#2A160C", eyeGrad:["#5A3420","#140904"], shine:true, brow:"#8E4716", browW:0.075, noseY:0.24, noseGrad:["#8A4A2E","#4A1E10"], mouthY:0.55, mouth:"#5A2A18", mouthW:0.045, mouthFill:"#4A1A10", tongue:"#E46A7A" };
+  eyes(c, s, R, o); mouth(c, s, R, o, talkFlap(s,t)); nose(c, R, o);
+  c.restore();
+}
+
+/* ---------- B: Flat Geo ---------- */
+function drawFlat(c, s, t) {
+  c.fillStyle = "#1F3B5C"; c.fillRect(0,0,300,300);
+  c.fillStyle = "#264A72"; c.beginPath(); c.arc(150, 300, 150, Math.PI, 0); c.fill();
+  const R = 70, bob = Math.sin(t*2.1)*3*!reduceMotion;
+  c.save(); c.translate(150, 145 + bob); c.rotate(s.tilt*0.8);
+  const spin = reduceMotion ? 0 : t*0.15, N = 12;
+  c.beginPath();
+  for (let i = 0; i < N*2; i++) { const a = spin + i/(N*2)*Math.PI*2, r = i % 2 ? R*1.18 : R*1.52; i ? c.lineTo(Math.cos(a)*r, Math.sin(a)*r) : c.moveTo(Math.cos(a)*r, Math.sin(a)*r); }
+  c.closePath(); c.fillStyle = "#E4572E"; c.fill();
+  ell(c, 0, 0, R*1.22, R*1.22); c.fillStyle = "#F28F3B"; c.fill();
+  for (const side of [-1,1]) { c.beginPath(); c.arc(side*R*0.62, -R*0.72, R*0.24, 0, Math.PI*2); c.fillStyle = "#F7C548"; c.fill(); c.beginPath(); c.arc(side*R*0.62, -R*0.72, R*0.11, 0, Math.PI*2); c.fillStyle = "#1F3B5C"; c.fill(); }
+  c.beginPath(); c.arc(0, 0, R, 0, Math.PI*2); c.fillStyle = "#F7C548"; c.fill();
+  c.beginPath(); c.ellipse(0, R*0.42, R*0.46, R*0.32, 0, 0, Math.PI*2); c.fillStyle = "#FFF1CF"; c.fill();
+  if (s.blush > 0.02) for (const side of [-1,1]) { c.beginPath(); c.arc(side*R*0.6, R*0.2, R*0.1, 0, Math.PI*2); c.fillStyle = `rgba(228,87,46,${0.8*s.blush})`; c.fill(); }
+  const o = { eyeY:-0.08, ink:"#1F2A44", shine:false, brow:"#1F2A44", browW:0.09, noseY:0.25, nose:"#1F2A44", mouthY:0.52, mouth:"#1F2A44", mouthW:0.06, mouthFill:"#1F2A44", tongue:"#E4572E" };
+  eyes(c, s, R, o); mouth(c, s, R, o, talkFlap(s,t)); nose(c, R, o);
+  c.restore();
+}
+
+/* ---------- C: Storybook Ink ---------- */
+const hash = (a, b) => { const x = Math.sin(a*127.1 + b*311.7)*43758.5453; return x - Math.floor(x); };
+function wobble(c, cx, cy, rx, ry, seed, frame, amp, scallop = 0, n = 40) {
+  c.beginPath();
+  for (let i = 0; i <= n; i++) {
+    const k = i % n, a = k/n*Math.PI*2, j = (hash(seed + k, frame) - 0.5)*amp;
+    const sc = scallop ? 1 + scallop*Math.abs(Math.sin(a*7)) : 1;
+    const x = cx + Math.cos(a)*(rx*sc + j), y = cy + Math.sin(a)*(ry*sc + j);
+    i ? c.lineTo(x, y) : c.moveTo(x, y);
+  }
+  c.closePath();
+}
+function inkShape(c, f, color, frame) {
+  c.save(); c.translate(3, 2.5); f(); c.fillStyle = color; c.globalAlpha = 0.9; c.fill(); c.restore();
+  f(); c.lineWidth = 2.6; c.lineJoin = "round"; c.strokeStyle = "#2B2420"; c.stroke();
+}
+function drawInk(c, s, t) {
+  c.fillStyle = "#F4EEDF"; c.fillRect(0,0,300,300);
+  c.fillStyle = "rgba(160,140,100,0.08)"; for (let i = 0; i < 60; i++) c.fillRect(hash(i,1)*300, hash(i,2)*300, 2, 2);
+  const R = 70, frame = reduceMotion ? 0 : Math.floor(t*7), bob = Math.sin(t*2.1)*3*!reduceMotion;
+  c.save(); c.translate(150, 148 + bob); c.rotate(s.tilt);
+  inkShape(c, () => wobble(c, 0, R*0.04, R*1.12, R*1.08, 10, frame, 4, 0.18, 70), "#E9A24A", frame);
+  c.strokeStyle = "#2B2420"; c.lineWidth = 1.3;
+  for (let i = 0; i < 12; i++) { const a = i/12*Math.PI*2 + 0.2, r1 = R*1.0, r2 = R*1.18; c.beginPath(); c.moveTo(Math.cos(a)*r1, Math.sin(a)*r1); c.lineTo(Math.cos(a+0.08)*r2, Math.sin(a+0.08)*r2); c.stroke(); }
+  for (const side of [-1,1]) inkShape(c, () => wobble(c, side*R*0.66, -R*0.68, R*0.24, R*0.24, 30 + side, frame, 2.5), "#F2C27A", frame);
+  inkShape(c, () => wobble(c, 0, 0, R*0.95, R*0.9, 50, frame, 3.5), "#F7D08A", frame);
+  inkShape(c, () => wobble(c, 0, R*0.38, R*0.44, R*0.3, 70, frame, 2.5), "#FFF6E2", frame);
+  if (s.blush > 0.02) for (const side of [-1,1]) { c.strokeStyle = `rgba(214,90,90,${0.8*s.blush})`; c.lineWidth = 1.6; for (let i = 0; i < 3; i++) { c.beginPath(); c.moveTo(side*R*0.52 + i*5 - 5, R*0.27); c.lineTo(side*R*0.52 + i*5, R*0.17); c.stroke(); } }
+  const o = { eyeY:-0.08, ink:"#2B2420", shine:true, brow:"#2B2420", browW:0.055, noseY:0.25, nose:"#2B2420", mouthY:0.5, mouth:"#2B2420", mouthW:0.04, mouthFill:"#2B2420", tongue:"#E07A6A" };
+  eyes(c, s, R, o); mouth(c, s, R, o, talkFlap(s,t)); nose(c, R, o);
+  c.restore();
+}
+
+/* ---------- D: Pixel Pal ---------- */
+const N = 40, off = document.createElement("canvas"); off.width = N; off.height = N;
+const octx = off.getContext("2d");
+const P = { bg:"#2D2A4A", bg2:"#3A3660", mane:"#B5562A", maneL:"#D9773A", head:"#F2B84B", shade:"#D9973A", muzzle:"#FBE3B0", ink:"#2A1A14", line:"#3A1E12", blush:"#F07A6A", white:"#FFFFFF", tongue:"#E46A7A" };
+function drawPixel(c, s, t) {
+  const img = octx.createImageData(N, N), grid = new Array(N*N).fill(null);
+  const bob = reduceMotion ? 0 : Math.round(Math.sin(t*2.1)*0.8);
+  const cx = 20, cy = 20 + bob;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const u = x + 0.5 - cx, v = y + 0.5 - cy, d = Math.hypot(u, v), a = Math.atan2(v, u);
+    let col = null;
+    if (d < 15 + 1.3*Math.abs(Math.sin(a*7))) col = Math.sin(a*7) > 0.3 ? "maneL" : "mane";
+    for (const sd of [-1,1]) { const du = u - sd*7.5, dv = v + 8; if (du*du + dv*dv < 9.5) col = du*du + dv*dv < 2.6 ? "muzzle" : "head"; }
+    if ((u/11)**2 + (v/10.3)**2 < 1) col = (u + v > 9) ? "shade" : "head";
+    for (const sd of [-1,1]) { const du = u - sd*2.5, dv = v - 4.6; if (du*du + dv*dv < 10) col = "muzzle"; }
+    grid[y*N + x] = col;
+  }
+  const out = grid.slice();
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const me = grid[y*N + x]; if (me) continue;
+    const nb = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy]) => { const X = x+dx, Y = y+dy; return X >= 0 && Y >= 0 && X < N && Y < N && grid[Y*N + X]; });
+    if (nb) out[y*N + x] = "line";
+  }
+  const put = (u, v, col) => { const x = Math.round(cx + u), y = Math.round(cy + v); if (x >= 0 && y >= 0 && x < N && y < N) out[y*N + x] = col; };
+  const open = Math.max(0, Math.min(1.3, s.eyeOpen*(1 - s.blink)));
+  const lx = Math.round(s.lookX*0.8), ly = Math.round(s.lookY*0.6);
+  for (const sd of [-1,1]) {
+    const ex = sd*4, ey = -2;
+    if (s.eyeHappy > 0.5) { put(ex-1, ey, "ink"); put(ex, ey-1, "ink"); put(ex+1, ey, "ink"); }
+    else {
+      const h = Math.max(1, Math.round(3*open));
+      for (let i = 0; i < h; i++) { put(ex + lx, ey - Math.floor(h/2) + i + ly, "ink"); put(ex + 1 + lx, ey - Math.floor(h/2) + i + ly, "ink"); }
+      if (h >= 2) put(ex + lx, ey - Math.floor(h/2) + ly, "white");
+    }
+    const by = -6 + Math.round(s.browY/5) + (sd < 0 ? Math.round(s.browAsym/5) : 0), tilt = Math.round(s.browTilt*4);
+    put(ex - sd, by - tilt*0, "ink"); put(ex, by, "ink"); put(ex + 1, by, "ink");
+    put(ex + (sd < 0 ? 2 : -1), by + tilt, "ink"); put(ex + (sd < 0 ? -1 : 2), by - tilt, "ink");
+    if (s.blush > 0.4) { put(sd*7, 2, "blush"); put(sd*7 + sd, 2, "blush"); }
+  }
+  put(-1, 2, "ink"); put(0, 2, "ink"); put(1, 2, "ink"); put(0, 3, "ink");
+  const w = s.mouthRound > 0.5 ? 1 : 3, cvv = s.mouthCurve, op = Math.round(Math.max(s.mouthOpen, talkFlap(s,t))*3.2);
+  for (let dx = -w; dx <= w; dx++) {
+    const k = 1 - (dx*dx)/(w*w + 0.01), yy = 5 + Math.round(cvv*k*1.4 - cvv*0.7);
+    put(dx, yy, "ink");
+    if (op >= 1) for (let i = 1; i <= Math.round(op*Math.sqrt(Math.max(0,k))); i++) put(dx, yy + i, i === Math.round(op*Math.sqrt(Math.max(0,k))) ? "ink" : (i > 1 ? "tongue" : "line"));
+  }
+  for (let i = 0; i < N*N; i++) {
+    const y = Math.floor(i / N), col = out[i] ? P[out[i]] : ((Math.floor(i % N / 4) + Math.floor(y / 4)) % 2 ? P.bg : P.bg2);
+    const n = parseInt(col.slice(1), 16);
+    img.data[i*4] = n >> 16; img.data[i*4+1] = (n >> 8) & 255; img.data[i*4+2] = n & 255; img.data[i*4+3] = 255;
+  }
+  octx.putImageData(img, 0, 0);
+  c.imageSmoothingEnabled = false; c.drawImage(off, 0, 0, 300, 300);
+}
+
+/* ---------- E: Neon Hologram ---------- */
+function drawNeon(c, s, t) {
+  c.fillStyle = "#070B18"; c.fillRect(0,0,300,300);
+  const g = c.createRadialGradient(150,150,10,150,150,170); g.addColorStop(0,"rgba(60,120,255,0.18)"); g.addColorStop(1,"rgba(60,120,255,0)"); c.fillStyle = g; c.fillRect(0,0,300,300);
+  const R = 68, bob = Math.sin(t*2.1)*3*!reduceMotion, flick = reduceMotion ? 1 : 0.92 + 0.08*Math.sin(t*37)*Math.sin(t*3);
+  c.save(); c.globalAlpha = flick; c.translate(150, 146 + bob); c.rotate(s.tilt);
+  c.shadowBlur = 14; c.lineCap = "round"; c.lineJoin = "round";
+  c.strokeStyle = "#FFB547"; c.shadowColor = "#FFB547"; c.lineWidth = 3;
+  for (let i = 0; i < 16; i++) { const a = i/16*Math.PI*2 + (reduceMotion ? 0 : t*0.2), x = Math.cos(a)*R*1.22, y = Math.sin(a)*R*1.18; c.beginPath(); c.arc(x, y, R*0.24, a - Math.PI/2, a + Math.PI/2); c.stroke(); }
+  c.strokeStyle = "#4FF0FF"; c.shadowColor = "#4FF0FF";
+  for (const side of [-1,1]) { c.beginPath(); c.arc(side*R*0.66, -R*0.7, R*0.22, Math.PI*0.8 + (side>0?0.4:0), Math.PI*2.2 + (side>0?0.4:0)); c.stroke(); }
+  ell(c, 0, 0, R, R*0.95); c.stroke();
+  for (const side of [-1,1]) { c.beginPath(); c.arc(side*R*0.2, R*0.4, R*0.24, Math.PI*0.15, Math.PI*0.95 + (side>0? -0.1:0.1)); c.stroke(); }
+  if (s.blush > 0.02) { c.strokeStyle = `rgba(255,95,210,${s.blush})`; c.shadowColor = "#FF5FD2"; for (const side of [-1,1]) { c.beginPath(); c.moveTo(side*R*0.5, R*0.2); c.lineTo(side*R*0.7, R*0.2); c.stroke(); } }
+  const o = { eyeY:-0.08, ink:"#4FF0FF", shine:false, brow:"#4FF0FF", browW:0.045, noseY:0.24, nose:"#FFB547", noseStrokeOnly:true, mouthY:0.56, mouth:"#4FF0FF", mouthW:0.04, mouthFill:"rgba(79,240,255,0.15)" };
+  c.shadowColor = "#4FF0FF"; eyes(c, s, R, o); mouth(c, s, R, o, talkFlap(s,t)); c.shadowColor = "#FFB547"; nose(c, R, o);
+  c.restore();
+  c.fillStyle = "rgba(0,0,0,0.18)"; for (let y = 0; y < 300; y += 3) c.fillRect(0, y, 300, 1);
+}
+
+/* ---------- cards ---------- */
+const STYLES = [
+  { id:"A", name:"Soft Clay", draw:drawClay,
+    desc:"Rounded, shaded and glossy, like a vinyl toy or a Pixar short.",
+    strength:"Feels the most premium and alive. Closest to the polish people expect from Apple.",
+    tradeoff:"Hardest to keep looking good when AI invents new characters.",
+    build:"SwiftUI gradients first; can move to true 3D (RealityKit) later." },
+  { id:"B", name:"Flat Geo", draw:drawFlat,
+    desc:"Bold flat shapes and a tight palette, like a modern brand mascot.",
+    strength:"Crisp at every size and the easiest for AI to recolor and remix.",
+    tradeoff:"The least detailed, so emotions rely on clear shapes.",
+    build:"SwiftUI shapes. The fastest to build." },
+  { id:"C", name:"Storybook Ink", draw:drawInk,
+    desc:"Hand-drawn outlines that gently wiggle, with watercolor fills.",
+    strength:"The most personality. Stands out in a portfolio because few apps look like this.",
+    tradeoff:"The wiggle can feel busy during long conversations.",
+    build:"SwiftUI Canvas with a jittered outline redrawn several times a second." },
+  { id:"D", name:"Pixel Pal", draw:drawPixel,
+    desc:"Chunky retro pixel art, like a tiny game character.",
+    strength:"Claude can draw any character pixel by pixel, so “make yourself a ___” works for anything.",
+    tradeoff:"Low detail on a big iPad or Mac screen; the retro look isn't for everyone.",
+    build:"A small pixel grid scaled up. Simple, light and fast." },
+  { id:"E", name:"Neon Hologram", draw:drawNeon,
+    desc:"Glowing line art on a dark background, like a projected AI.",
+    strength:"Looks futuristic, and suits Mac and Vision Pro in dark mode.",
+    tradeoff:"Feels cooler and less cuddly; needs a dark background.",
+    build:"SwiftUI strokes with glow effects." },
+];
+
+const grid = document.getElementById("grid"), cards = [];
+STYLES.forEach((st, i) => {
+  const el = document.createElement("article"); el.className = "card";
+  el.innerHTML = `<div class="art"><canvas aria-label="${st.name} lion"></canvas><span class="tag">neutral</span></div>
+    <div class="body"><h2>${st.name} <b>Option ${st.id}</b></h2><p>${st.desc}</p>
+    <dl><dt>Strength</dt><dd>${st.strength}</dd><dt>Tradeoff</dt><dd>${st.tradeoff}</dd><dt>Apple build</dt><dd>${st.build}</dd></dl></div>`;
+  grid.appendChild(el);
+  const cv = el.querySelector("canvas");
+  const card = { st, cv, ctx: cv.getContext("2d"), tag: el.querySelector(".tag"), cur: Object.assign({}, BASE, { blink:0, talking:false }),
+    mood:"neutral", seq: i % SEQ.length, next: 0.6 + i*0.35, blinkIn: 1 + Math.random()*3, blinkT: -1 };
+  cv.addEventListener("click", () => { card.seq = (card.seq + 1) % SEQ.length; card.next = 0; });
+  cards.push(card);
+});
+function resize() { for (const k of cards) { const r = k.cv.getBoundingClientRect(), d = devicePixelRatio || 1; k.cv.width = Math.round(r.width*d); k.cv.height = Math.round(r.height*d); k.scale = r.width/300*d; } }
+new ResizeObserver(resize).observe(grid); resize();
+
+/* ---------- toolbar ---------- */
+let forced = null;
+const tb = document.getElementById("toolbar");
+const opts = [["auto","Cycle"], ["happy","Happy"], ["laughing","Laughing"], ["sad","Sad"], ["surprised","Surprised"], ["thinking","Thinking"], ["concerned","Concerned"], ["talking","Talking"]];
+opts.forEach(([k, label]) => {
+  const b = document.createElement("button"); b.type = "button"; b.textContent = label; b.dataset.k = k;
+  b.setAttribute("aria-pressed", String(k === "auto"));
+  b.addEventListener("click", () => {
+    forced = k === "auto" ? null : k;
+    tb.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    if (!forced) cards.forEach(c => c.next = 0);
+  });
+  tb.appendChild(b);
+});
+
+/* ---------- loop ---------- */
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last)/1000), t = now/1000; last = now;
+  for (const k of cards) {
+    if (forced) { k.mood = forced === "talking" ? "neutral" : forced; k.cur.talking = forced === "talking"; }
+    else {
+      k.next -= dt;
+      if (k.next <= 0) { const [m, talk] = SEQ[k.seq]; k.mood = m; k.cur.talking = talk; k.seq = (k.seq + 1) % SEQ.length; k.next = 2.4; }
+      if (k.cur.talking && k.next < 0.9) k.cur.talking = false;
+    }
+    k.tag.textContent = k.cur.talking ? (k.mood === "neutral" ? "talking" : k.mood + " · talking") : k.mood;
+    const tg = EXPR[k.mood], f = 1 - Math.exp(-dt*9);
+    for (const key in tg) k.cur[key] += (tg[key] - k.cur[key])*f;
+    k.blinkIn -= dt;
+    if (k.blinkIn <= 0 && k.blinkT < 0) { k.blinkT = 0; k.blinkIn = 2 + Math.random()*3.5; }
+    if (k.blinkT >= 0) { k.blinkT += dt; const p = k.blinkT/0.16; k.cur.blink = p < 1 ? Math.sin(Math.PI*p) : 0; if (p >= 1) k.blinkT = -1; }
+    k.ctx.setTransform(k.scale, 0, 0, k.scale, 0, 0);
+    k.st.draw(k.ctx, k.cur, t);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>

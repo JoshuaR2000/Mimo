@@ -1,0 +1,504 @@
+<title>Zuri the Alien</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: a large dark 3D stage beside a control panel; stacks on narrow screens. */
+:root {
+  --bg: #EEF0F6; --surface: #FFFFFF; --ink: #171B2E; --muted: #5A6078; --line: #D8DCE8;
+  --accent: #5B4BDB; --accent-ink: #FFFFFF; --chip: #E5E7F2;
+  --stage: #0E1330; --caption-bg: rgba(8, 10, 26, 0.72); --caption-ink: #F2F4FF; --glow: #7DF9FF;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg:#0B0E1C; --surface:#151A2E; --ink:#E9ECFA; --muted:#9AA1BC; --line:#262C45; --accent:#A99DFF; --accent-ink:#0B0E1C; --chip:#1F2540; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg:#0B0E1C; --surface:#151A2E; --ink:#E9ECFA; --muted:#9AA1BC; --line:#262C45; --accent:#A99DFF; --accent-ink:#0B0E1C; --chip:#1F2540; color-scheme: dark; }
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 40px;
+}
+.wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: grid; gap: 4px; }
+.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+h1 { font-family: var(--font-display); font-size: clamp(28px, 4vw, 40px); line-height: 1.1; margin: 0; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); max-width: 66ch; }
+.layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 880px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.stage { position: relative; border-radius: 22px; overflow: hidden; background: var(--stage); aspect-ratio: 4 / 5; max-width: 100%; }
+@media (min-width: 881px) { .stage { position: sticky; top: calc(16px + env(safe-area-inset-top, 0px)); } }
+.stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.stage canvas:active { cursor: grabbing; }
+.pill { position: absolute; top: 14px; font-family: var(--font-mono); font-size: 12px; color: var(--caption-ink); background: var(--caption-bg); border-radius: 999px; padding: 5px 11px; }
+.pill.mood { left: 14px; } .pill.mood b { font-weight: 400; color: var(--glow); }
+.pill.hint { right: 14px; }
+.caption { position: absolute; left: 14px; right: 14px; bottom: 14px; display: grid; gap: 6px; pointer-events: none; }
+.caption .you, .caption .says { background: var(--caption-bg); color: var(--caption-ink); border-radius: 14px; padding: 9px 13px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.caption .you { justify-self: end; max-width: 85%; font-size: 14px; color: #C4CAE6; }
+.caption .says { font-size: 16px; }
+.caption .you:empty, .caption .says:empty { display: none; }
+.fail { position: absolute; inset: 0; display: grid; place-items: center; color: var(--caption-ink); padding: 24px; text-align: center; }
+.panel { display: grid; gap: 14px; min-width: 0; }
+.group { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
+.group h2 { font-family: var(--font-display); font-size: 17px; margin: 0; }
+.hint-text { margin: 0; color: var(--muted); font-size: 13.5px; }
+form.row { display: flex; gap: 8px; }
+input[type="text"] { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+button { font: inherit; font-weight: 700; cursor: pointer; border-radius: 10px; padding: 9px 14px; border: 1px solid transparent; background: var(--accent); color: var(--accent-ink); }
+button.ghost { background: var(--chip); color: var(--ink); font-weight: 400; padding: 7px 12px; }
+button.ghost[aria-pressed="true"] { border-color: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+label.toggle { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14px; cursor: pointer; }
+.swatch { width: 36px; height: 36px; border-radius: 50%; padding: 0; border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent); }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Prototype · 3D character</span>
+    <h1>Zuri the Alien</h1>
+    <p>A full-body 3D assistant with a face and body language. Drag to turn Zuri around. In the Apple app, Claude writes the replies and picks the mood and gesture.</p>
+  </header>
+
+  <div class="layout">
+    <section class="stage" aria-label="3D alien character">
+      <canvas id="cv"></canvas>
+      <div class="pill mood">mood: <b id="moodLabel">neutral</b></div>
+      <div class="pill hint">drag to rotate</div>
+      <div class="caption" aria-live="polite"><div class="you" id="you"></div><div class="says" id="says"></div></div>
+    </section>
+
+    <div class="panel">
+      <div class="group">
+        <h2>Talk to Zuri</h2>
+        <form class="row" id="talkForm">
+          <input type="text" id="talkInput" placeholder="Try “tell me a joke” or “I passed my exam!”" autocomplete="off">
+          <button type="submit">Send</button>
+        </form>
+        <div class="toolbar">
+          <button class="ghost" id="demoBtn" type="button">Play demo conversation</button>
+          <label class="toggle"><input type="checkbox" id="voiceOn"> Browser voice</label>
+        </div>
+        <p class="hint-text">The browser voice is only a stand-in. The Apple app will use much better voices.</p>
+      </div>
+      <div class="group">
+        <h2>Expressions</h2>
+        <div class="chips" id="exprChips"></div>
+        <h2>Gestures</h2>
+        <div class="chips" id="gestChips"></div>
+      </div>
+      <div class="group">
+        <h2>Skin color</h2>
+        <div class="chips" id="skinChips"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+"use strict";
+const $ = id => document.getElementById(id);
+const stage = document.querySelector(".stage"), cv = $("cv");
+if (!window.THREE) { stage.insertAdjacentHTML("beforeend", '<div class="fail">The 3D library didn’t load. Reload the page to try again.</div>'); return; }
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- renderer, scene, camera ---------- */
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true }); }
+catch (e) { stage.insertAdjacentHTML("beforeend", '<div class="fail">This browser can’t show 3D graphics (WebGL is off).</div>'); return; }
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.9;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#0E1330");
+scene.fog = new THREE.Fog("#0E1330", 14, 34);
+const camera = new THREE.PerspectiveCamera(32, 0.8, 0.1, 100);
+camera.position.set(0.7, 2.0, 8.6);
+const controls = new THREE.OrbitControls(camera, cv);
+controls.target.set(0, 1.45, 0); controls.enableDamping = true; controls.enablePan = false;
+controls.minDistance = 4.2; controls.maxDistance = 10; controls.maxPolarAngle = 1.72; controls.minPolarAngle = 0.5;
+controls.update();
+
+scene.add(new THREE.HemisphereLight("#C9DCFF", "#2A1F4A", 0.45));
+const key = new THREE.DirectionalLight("#FFF3E2", 1.5); key.position.set(3, 6, 4); key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024); Object.assign(key.shadow.camera, { left:-3, right:3, top:4, bottom:-1, near:1, far:20 }); key.shadow.bias = -0.0005;
+scene.add(key);
+const rim = new THREE.DirectionalLight("#8A7BFF", 1.8); rim.position.set(-4, 3, -4); scene.add(rim);
+const fillL = new THREE.DirectionalLight("#7DF9FF", 0.45); fillL.position.set(-3, 1, 3); scene.add(fillL);
+
+// stars
+{
+  const n = 500, pos = new Float32Array(n*3);
+  for (let i = 0; i < n; i++) { const u = Math.random()*2 - 1, a = Math.random()*Math.PI*2, r = 22 + Math.random()*8, s = Math.sqrt(1 - u*u);
+    pos[i*3] = Math.cos(a)*s*r; pos[i*3+1] = Math.abs(u)*r*0.8 + 1; pos[i*3+2] = Math.sin(a)*s*r; }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: "#FFFFFF", size: 0.09, transparent: true, opacity: 0.8 })));
+}
+
+/* ---------- materials ---------- */
+const SKINS = { Mint:"#3FBF86", Lavender:"#8E6FE8", Coral:"#F0705C", Sky:"#4C9EEA", Lime:"#8CC63A" };
+const skin = new THREE.MeshPhysicalMaterial({ color: SKINS.Mint, roughness: 0.55, clearcoat: 0.2, clearcoatRoughness: 0.5 });
+const lidMat = skin.clone(); lidMat.side = THREE.DoubleSide;
+const browMat = new THREE.MeshStandardMaterial({ color: "#3E7A5E", roughness: 0.6 });
+const suit = new THREE.MeshPhysicalMaterial({ color: "#D9DDEA", roughness: 0.35, clearcoat: 0.7, clearcoatRoughness: 0.2 });
+const accent = new THREE.MeshStandardMaterial({ color: "#5B4BDB", roughness: 0.35, metalness: 0.25 });
+const eyeWhite = new THREE.MeshPhysicalMaterial({ color: "#FFFFFF", roughness: 0.12, clearcoat: 1 });
+const irisMat = new THREE.MeshPhysicalMaterial({ color: "#7446E0", roughness: 0.2, clearcoat: 1, emissive: "#2A1060", emissiveIntensity: 0.35 });
+const pupilMat = new THREE.MeshStandardMaterial({ color: "#0B0614", roughness: 0.08 });
+const shineMat = new THREE.MeshBasicMaterial({ color: "#FFFFFF" });
+const glowMat = new THREE.MeshStandardMaterial({ color: "#B9FCFF", emissive: "#4FF0FF", emissiveIntensity: 1.6 });
+const gemMat = new THREE.MeshStandardMaterial({ color: "#B9FCFF", emissive: "#4FF0FF", emissiveIntensity: 1.2, roughness: 0.1 });
+const mouthMat = new THREE.MeshStandardMaterial({ color: "#3A1430", roughness: 0.7, side: THREE.DoubleSide });
+const tongueMat = new THREE.MeshStandardMaterial({ color: "#FF7A9A", roughness: 0.6, side: THREE.DoubleSide });
+const blushMat = new THREE.MeshBasicMaterial({ color: "#FF6F91", transparent: true, opacity: 0, depthWrite: false });
+const padMat = new THREE.MeshStandardMaterial({ color: "#1B2140", roughness: 0.5, metalness: 0.5 });
+
+function setSkin(hex) {
+  skin.color.set(hex); lidMat.color.set(hex);
+  browMat.color.set(hex).multiplyScalar(0.5);
+  document.querySelectorAll("#skinChips button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.c === hex)));
+}
+
+const add = (parent, geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
+const G = () => new THREE.Group();
+
+/* ---------- landing pad ---------- */
+const pad = add(scene, new THREE.CylinderGeometry(1.35, 1.45, 0.14, 64), padMat, 0, -0.07, 0); pad.receiveShadow = true; pad.castShadow = false;
+const ring = add(scene, new THREE.TorusGeometry(1.25, 0.025, 12, 96), glowMat, 0, 0.005, 0); ring.rotation.x = Math.PI/2; ring.castShadow = false;
+const ring2 = add(scene, new THREE.TorusGeometry(0.85, 0.012, 8, 96), glowMat, 0, 0.004, 0); ring2.rotation.x = Math.PI/2; ring2.castShadow = false;
+
+/* ---------- body rig ---------- */
+const root = G(); scene.add(root);
+const legs = [];
+for (const side of [-1, 1]) {
+  const hip = G(); hip.position.set(side*0.24, 0.62, 0); root.add(hip);
+  add(hip, new THREE.CapsuleGeometry(0.14, 0.28, 8, 16), skin, 0, -0.25, 0);
+  const boot = add(hip, new THREE.SphereGeometry(0.2, 24, 16), suit, 0, -0.52, 0.07); boot.scale.set(1, 0.62, 1.35);
+  legs.push(hip);
+}
+const torso = G(); torso.position.set(0, 1.2, 0); root.add(torso);
+const bodyShape = G(); bodyShape.scale.set(1, 1, 0.85); torso.add(bodyShape);
+add(bodyShape, new THREE.CapsuleGeometry(0.5, 0.3, 12, 32), suit);
+const belt = add(bodyShape, new THREE.TorusGeometry(0.5, 0.045, 12, 64), accent, 0, -0.28, 0); belt.rotation.x = Math.PI/2;
+const collar = add(bodyShape, new THREE.TorusGeometry(0.33, 0.06, 12, 48), accent, 0, 0.6, 0); collar.rotation.x = Math.PI/2;
+const gem = add(torso, new THREE.SphereGeometry(0.1, 24, 16), gemMat, 0, 0.18, 0.43); gem.scale.z = 0.55;
+
+const arms = {};
+for (const side of [-1, 1]) {
+  const shoulder = G(); shoulder.position.set(side*0.5, 0.38, 0); torso.add(shoulder);
+  add(shoulder, new THREE.CapsuleGeometry(0.115, 0.26, 8, 16), suit, 0, -0.22, 0);
+  const elbow = G(); elbow.position.set(0, -0.46, 0); shoulder.add(elbow);
+  add(elbow, new THREE.CapsuleGeometry(0.1, 0.22, 8, 16), skin, 0, -0.19, 0);
+  const hand = add(elbow, new THREE.SphereGeometry(0.15, 24, 16), skin, 0, -0.41, 0);
+  add(hand, new THREE.SphereGeometry(0.062, 16, 12), skin, -side*0.1, 0.04, 0.08);
+  arms[side] = { shoulder, elbow, cur: { z:0.22, x:0, ex:-0.15, ez:0 } };
+}
+
+/* ---------- head ---------- */
+const neck = G(); neck.position.set(0, 0.62, 0); torso.add(neck);
+const head = G(); head.position.set(0, 0.58, 0); neck.add(head);
+const HA = 1, HB = 0.9, HC = 0.88;
+const headMesh = add(head, new THREE.SphereGeometry(1, 64, 48), skin); headMesh.scale.set(HA, HB, HC);
+const surf = (x, y) => Math.max(0, HC*Math.sqrt(Math.max(0, 1 - (x/HA)**2 - (y/HB)**2)));
+const tiltFor = y => Math.atan2(-(y/(HB*HB)), (surf(0, y)/(HC*HC)));
+
+const RE = 0.25, eyes = [];
+for (const side of [-1, 1]) {
+  const x = side*0.37, y = 0.03;
+  const g = G(); g.position.set(x, y, surf(x, y) - RE*0.42); g.rotation.set(-0.04, side*0.3, 0); head.add(g);
+  add(g, new THREE.SphereGeometry(RE, 32, 24), eyeWhite);
+  const look = G(); g.add(look);
+  const iris = add(look, new THREE.SphereGeometry(RE*0.64, 32, 24), irisMat, 0, 0, RE*0.8); iris.scale.z = 0.35;
+  const pupil = add(look, new THREE.SphereGeometry(RE*0.33, 24, 16), pupilMat, 0, 0, RE*0.9); pupil.scale.z = 0.3;
+  add(g, new THREE.SphereGeometry(RE*0.11, 12, 8), shineMat, -RE*0.26, RE*0.3, RE*0.94);
+  add(g, new THREE.SphereGeometry(RE*0.05, 8, 6), shineMat, RE*0.22, -RE*0.2, RE*0.97);
+  const upper = add(g, new THREE.SphereGeometry(RE*1.08, 32, 16, 0, Math.PI*2, 0, Math.PI/2), lidMat);
+  const lower = add(g, new THREE.SphereGeometry(RE*1.07, 32, 16, 0, Math.PI*2, Math.PI/2, Math.PI/2), lidMat);
+  eyes.push({ side, look, upper, lower });
+}
+const brows = [];
+for (const side of [-1, 1]) {
+  const g = G(); head.add(g);
+  const inner = G(); g.add(inner);
+  const m = add(inner, new THREE.CapsuleGeometry(0.034, 0.17, 6, 12), browMat); m.rotation.z = Math.PI/2;
+  brows.push({ side, g, inner });
+}
+const blush = [];
+for (const side of [-1, 1]) {
+  const x = side*0.6, y = -0.2;
+  const m = add(head, new THREE.SphereGeometry(1, 24, 12), blushMat, x, y, surf(x, y) + 0.005); m.castShadow = false;
+  m.scale.set(0.15, 0.08, 0.02); m.rotation.y = side*0.55; blush.push(m);
+}
+// mouth
+const MY = -0.37;
+const mouthG = G(); mouthG.position.set(0, MY, surf(0, MY) + 0.012); head.add(mouthG);
+mouthG.rotation.x = Math.atan2(-MY/(HB*HB), surf(0, MY)/(HC*HC));
+const mouthMesh = new THREE.Mesh(new THREE.BufferGeometry(), mouthMat); mouthG.add(mouthMesh);
+const tongueMesh = new THREE.Mesh(new THREE.BufferGeometry(), tongueMat); tongueMesh.position.z = 0.004; mouthG.add(tongueMesh);
+let mouthKey = "";
+function buildMouth(curve, open, round) {
+  const w = 0.17*(1 - 0.5*round), c = curve*0.06, o = open*0.17;
+  const k = [w, c, o].map(v => v.toFixed(3)).join(",");
+  if (k === mouthKey) return; mouthKey = k;
+  mouthMesh.geometry.dispose(); tongueMesh.geometry.dispose();
+  if (o < 0.012) {
+    const path = new THREE.QuadraticBezierCurve3(new THREE.Vector3(-w, c, 0), new THREE.Vector3(0, -c, 0), new THREE.Vector3(w, c, 0));
+    mouthMesh.geometry = new THREE.TubeGeometry(path, 16, 0.022, 8, false);
+    tongueMesh.geometry = new THREE.BufferGeometry();
+  } else {
+    const s = new THREE.Shape(); s.moveTo(-w, c);
+    s.quadraticCurveTo(0, -c*0.9 + o*(0.15 + 0.9*round), w, c);
+    s.quadraticCurveTo(0, -c - o*1.6, -w, c);
+    mouthMesh.geometry = new THREE.ShapeGeometry(s, 20);
+    const t = new THREE.Shape(); t.absellipse(0, -o*0.5, w*0.48, o*0.27, 0, Math.PI*2, false, 0);
+    tongueMesh.geometry = new THREE.ShapeGeometry(t, 20);
+  }
+}
+// antennae
+const glowTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 64; const x = c.getContext("2d");
+  const g = x.createRadialGradient(32,32,0,32,32,32); g.addColorStop(0,"rgba(255,255,255,1)"); g.addColorStop(0.35,"rgba(255,255,255,0.45)"); g.addColorStop(1,"rgba(255,255,255,0)");
+  x.fillStyle = g; x.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
+const antennae = [];
+for (const side of [-1, 1]) {
+  const g = G(); g.position.set(side*0.3, 0.8, 0.05); head.add(g);
+  const path = new THREE.CatmullRomCurve3([new THREE.Vector3(0,0,0), new THREE.Vector3(side*0.04,0.28,0.02), new THREE.Vector3(side*0.12,0.52,0.06), new THREE.Vector3(side*0.16,0.74,0.02)]);
+  add(g, new THREE.TubeGeometry(path, 24, 0.035, 10, false), skin);
+  const tip = add(g, new THREE.SphereGeometry(0.085, 20, 14), glowMat, side*0.16, 0.8, 0.02);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: "#7DF9FF", blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+  halo.scale.set(0.55, 0.55, 1); tip.add(halo);
+  antennae.push({ side, g, halo, a: 0, v: 0 });
+}
+
+/* ---------- expressions and poses ---------- */
+const BASE = { browY:0, browTilt:0, browAsym:0, eyeOpen:1, eyeHappy:0, mouthCurve:0.35, mouthOpen:0, mouthRound:0, tilt:0, blush:0, lookX:0, lookY:0, pitch:0, droop:0 };
+const EXPR = {
+  neutral:{}, happy:{ browY:-7, eyeHappy:0.85, mouthCurve:1, mouthOpen:0.3, tilt:0.06, blush:0.7, pitch:-0.06, droop:-0.1 },
+  laughing:{ browY:-10, eyeHappy:1, mouthCurve:1, mouthOpen:0.85, tilt:-0.05, blush:0.9, pitch:-0.2, droop:-0.1 },
+  sad:{ browY:-2, browTilt:-0.38, eyeOpen:0.72, mouthCurve:-0.85, tilt:-0.1, lookY:0.6, pitch:0.22, droop:0.75 },
+  surprised:{ browY:-16, eyeOpen:1.25, mouthCurve:0, mouthOpen:0.75, mouthRound:1, pitch:-0.1, droop:-0.3 },
+  thinking:{ browY:-3, browTilt:0.1, browAsym:-9, eyeOpen:0.9, mouthCurve:-0.15, tilt:0.13, lookX:0.7, lookY:-0.8, pitch:-0.12 },
+  concerned:{ browY:5, browTilt:0.38, eyeOpen:0.85, mouthCurve:-0.6, pitch:0.08, droop:0.25 },
+};
+for (const k in EXPR) EXPR[k] = Object.assign({}, BASE, EXPR[k]);
+const ARM = {
+  neutral:{ z:0.22, x:0, ex:-0.15, ez:0 }, happy:{ z:0.5, x:0, ex:-0.35, ez:0 },
+  laughing:{ z:0.12, x:-0.55, ex:-1.25, ez:0 }, sad:{ z:0.05, x:0.08, ex:0, ez:0 },
+  surprised:{ z:0.8, x:-0.2, ex:-0.9, ez:0 }, thinking:{ z:0.2, x:0, ex:-0.2, ez:0 },
+  concerned:{ z:-0.12, x:-0.62, ex:-1.1, ez:0 },
+};
+const CHIN = { z:-0.35, x:-1.3, ex:-1.6, ez:0 };
+const GESTURES = { wave:2.4, nod:1.3, shake:1.3, jump:1.1, shrug:1.6 };
+
+let mood = "neutral", speaking = false, gesture = null, gestureT = 0;
+const cur = Object.assign({}, BASE);
+let blink = 0, nextBlink = 1.5, blinkT = -1, pointer = null, glance = { x:0, y:0 }, nextGlance = 2;
+
+cv.addEventListener("pointermove", e => {
+  if (e.buttons) { pointer = null; return; }
+  const r = cv.getBoundingClientRect();
+  pointer = { x: Math.max(-1, Math.min(1, ((e.clientX - r.left)/r.width - 0.5)*2.2)), y: Math.max(-1, Math.min(1, ((e.clientY - r.top)/r.height - 0.3)*2.2)) };
+});
+cv.addEventListener("pointerleave", () => pointer = null);
+
+function resize() {
+  const r = stage.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / r.height; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage); resize();
+
+/* ---------- frame loop ---------- */
+const clock = new THREE.Clock();
+let prevPitch = 0, prevYaw = 0;
+function frame() {
+  const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime, idle = reduceMotion ? 0 : 1;
+  const tgt = Object.assign({}, EXPR[mood]);
+  if (mood === "neutral" || mood === "happy") {
+    if (pointer) { tgt.lookX = pointer.x; tgt.lookY = pointer.y; }
+    else { nextGlance -= dt; if (nextGlance <= 0) { glance = Math.random() < 0.5 ? { x:0, y:0 } : { x:(Math.random()*2-1)*0.7, y:(Math.random()*2-1)*0.4 }; nextGlance = 1.5 + Math.random()*3; } tgt.lookX = glance.x; tgt.lookY = glance.y; }
+  }
+  const k = 1 - Math.exp(-dt*8);
+  for (const key in tgt) cur[key] += (tgt[key] - cur[key])*k;
+
+  nextBlink -= dt;
+  if (nextBlink <= 0 && blinkT < 0) { blinkT = 0; nextBlink = 2 + Math.random()*3.5; }
+  if (blinkT >= 0) { blinkT += dt; const p = blinkT/0.15; blink = p < 1 ? Math.sin(Math.PI*p) : 0; if (p >= 1) blinkT = -1; }
+
+  // gestures
+  let nod = 0, shake = 0, jumpY = 0, squash = 0, gTilt = 0, armOverride = {};
+  if (gesture) {
+    gestureT += dt; const dur = GESTURES[gesture], p = gestureT/dur;
+    if (p >= 1) gesture = null;
+    else {
+      const env = Math.sin(Math.PI*Math.min(1, p)), ramp = Math.min(1, Math.min(p, 1 - p)*5);
+      if (gesture === "nod") nod = Math.sin(gestureT*11)*0.16*env;
+      if (gesture === "shake") shake = Math.sin(gestureT*12)*0.3*env;
+      if (gesture === "jump") { const j = Math.sin(Math.PI*Math.min(1, p*1.15)); jumpY = Math.max(0, j)*0.55; squash = p > 0.85 ? Math.sin(Math.PI*(p - 0.85)/0.15)*0.12 : 0; armOverride[1] = armOverride[-1] = { z:0.9*ramp + 0.22, x:-0.3*ramp, ex:-0.6*ramp, ez:0 }; }
+      if (gesture === "wave") armOverride[1] = { z:2.5*ramp + 0.2*(1-ramp), x:-0.15*ramp, ex:0, ez:(0.35 + Math.sin(gestureT*12)*0.45)*ramp };
+      if (gesture === "shrug") { gTilt = 0.12*ramp; armOverride[1] = armOverride[-1] = { z:0.6*ramp, x:-0.55*ramp, ex:-1.15*ramp, ez:0 }; }
+    }
+  }
+
+  // arms
+  for (const side of [-1, 1]) {
+    const a = arms[side];
+    const target = armOverride[side] || (mood === "thinking" && side === 1 ? CHIN : ARM[mood]);
+    const ka = 1 - Math.exp(-dt*(armOverride[side] ? 18 : 7));
+    for (const key in target) a.cur[key] += (target[key] - a.cur[key])*ka;
+    const sway = Math.sin(t*1.6 + side)*0.03*idle;
+    a.shoulder.rotation.set(a.cur.x + sway, 0, side*a.cur.z);
+    a.elbow.rotation.set(a.cur.ex, 0, side*a.cur.ez);
+  }
+
+  // body
+  const laughBob = mood === "laughing" ? Math.abs(Math.sin(t*9))*0.05 : 0;
+  root.position.y = jumpY + laughBob;
+  root.scale.set(1 + squash*0.6, 1 - squash, 1 + squash*0.6);
+  torso.rotation.z = Math.sin(t*0.9)*0.025*idle - cur.tilt*0.2;
+  torso.scale.y = 1 + Math.sin(t*2.2)*0.012*idle;
+  legs.forEach((h, i) => h.rotation.z = (i ? 1 : -1)*0.02 + Math.sin(t*0.9)*0.01*idle);
+
+  // head
+  const pitch = cur.pitch + cur.lookY*0.12 + nod;
+  const yaw = cur.lookX*0.25 + shake;
+  head.rotation.set(pitch, yaw, -cur.tilt - gTilt + Math.sin(t*0.7)*0.02*idle);
+  head.position.y = 0.58 + Math.sin(t*2.2)*0.012*idle;
+
+  // eyes
+  const open = Math.max(0.05, Math.min(1.3, cur.eyeOpen*(1 - blink)));
+  for (const e of eyes) {
+    e.upper.rotation.x = Math.PI/2 - Math.PI*0.88*open;
+    e.lower.rotation.x = Math.PI/2*(1 - 0.62*cur.eyeHappy);
+    e.look.rotation.set(cur.lookY*0.32, cur.lookX*0.4, 0);
+  }
+  for (const b of brows) {
+    const x = b.side*0.36, y = 0.36 - cur.browY*0.009 - (b.side < 0 ? cur.browAsym*0.009 : 0);
+    b.g.position.set(x, y, surf(x, y) + 0.025);
+    b.g.rotation.set(-Math.atan2(y/(HB*HB), surf(x, y)/(HC*HC)), b.side*0.32, 0);
+    b.inner.rotation.z = b.side*cur.browTilt;
+  }
+  blushMat.opacity = 0.5*cur.blush;
+  const flap = speaking ? 0.18 + 0.5*Math.abs(Math.sin(t*15))*(0.65 + 0.35*Math.sin(t*4.7)) : 0;
+  buildMouth(cur.mouthCurve, Math.max(cur.mouthOpen, flap), cur.mouthRound);
+
+  // antennae spring: react to head motion
+  const dPitch = pitch - prevPitch, dYaw = yaw - prevYaw; prevPitch = pitch; prevYaw = yaw;
+  for (const an of antennae) {
+    const target = cur.droop + Math.sin(t*2.4 + an.side)*0.04*idle;
+    an.v += ((target - an.a)*60 - an.v*7)*dt; an.v -= (dPitch*30 + jumpY*0) ; an.a += an.v*dt;
+    an.g.rotation.set(an.a, 0, an.side*(0.12 + cur.droop*0.25) - dYaw*2);
+    const pulse = mood === "thinking" ? 0.5 + 0.5*Math.sin(t*6) : 0.75 + 0.25*Math.sin(t*2);
+    an.halo.material.opacity = 0.55 + 0.45*pulse;
+  }
+  gemMat.emissiveIntensity = speaking ? 1.2 + flap*2.2 : 1.0 + 0.3*Math.sin(t*2);
+  ring.material.emissiveIntensity = 1.4 + 0.3*Math.sin(t*1.5);
+
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ---------- conversation ---------- */
+const moodLabel = $("moodLabel"), saysEl = $("says"), youEl = $("you");
+let moodTimer = null, sayId = 0, typeTimer = null;
+function setMood(m) {
+  mood = m; moodLabel.textContent = m;
+  document.querySelectorAll("#exprChips button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.m === m)));
+}
+function doGesture(g) { gesture = g; gestureT = 0; }
+function say(text, m = "neutral", g = null, you = null) {
+  const id = ++sayId;
+  clearTimeout(moodTimer); clearInterval(typeTimer);
+  try { speechSynthesis.cancel(); } catch {}
+  youEl.textContent = you ? "You: " + you : "";
+  setMood(m); if (g) doGesture(g);
+  speaking = true; saysEl.textContent = "";
+  return new Promise(resolve => {
+    let i = 0, typed = false, voiced = !$("voiceOn").checked;
+    const done = () => {
+      if (id !== sayId || !typed || !voiced) return;
+      speaking = false;
+      moodTimer = setTimeout(() => { if (id === sayId) setMood("neutral"); }, 2600);
+      resolve();
+    };
+    typeTimer = setInterval(() => {
+      if (id !== sayId) { clearInterval(typeTimer); return; }
+      i++; saysEl.textContent = text.slice(0, i);
+      if (i >= text.length) { clearInterval(typeTimer); typed = true; setTimeout(done, 250); }
+    }, 38);
+    if (!voiced) {
+      try {
+        const u = new SpeechSynthesisUtterance(text); u.pitch = 1.3; u.rate = 1.02;
+        u.onend = u.onerror = () => { voiced = true; done(); };
+        speechSynthesis.speak(u);
+        setTimeout(() => { voiced = true; done(); }, text.split(/\s+/).length*420 + 2500);
+      } catch { voiced = true; }
+    }
+  });
+}
+const has = (s, list) => list.some(w => new RegExp("\\b" + w + "\\b", "i").test(s));
+async function respond(text) {
+  if (has(text, ["joke"])) return say("Why did the alien skip the party? It needed more space!", "laughing", "jump", text);
+  if (has(text, ["lol","haha","hah","funny","lmao"])) return say("Ha! Good one. We laugh like that on my planet too.", "laughing", "jump", text);
+  if (has(text, ["dance","jump"])) return say("Wheee! Gravity here is so bouncy.", "happy", "jump", text);
+  if (has(text, ["sad","sorry","failed","lost","bad","tired","sick","miss","broke","terrible","awful"])) return say("Oh no, I'm sorry. That sounds hard. Want me to help with anything?", "sad", null, text);
+  if (has(text, ["great","awesome","love","thanks","thank","yay","happy","passed","won","amazing"])) return say("That's great to hear! I'm really happy for you.", "happy", "jump", text);
+  if (has(text, ["wow","whoa","omg","crazy"])) return say("Whoa, really? Tell me more!", "surprised", null, text);
+  if (has(text, ["dunno","idk","whatever","maybe"])) return say("Hmm, I'm not sure either!", "neutral", "shrug", text);
+  if (/\?\s*$/.test(text) || /^(what|how|why|who|when|where|can|could|should|is|are|do|does|will)\b/i.test(text)) {
+    await say("Hmm, let me think about that...", "thinking", null, text);
+    return say("In the real app, Claude answers this and can search the web. Here I can only react.", "happy", "nod", text);
+  }
+  if (has(text, ["hi","hello","hey","yo"])) return say("Hi! I'm Zuri. Nice to meet you!", "happy", "wave", text);
+  return say("Got it. In the real app, Claude writes what I say. Here I'm showing how I'd react.", "neutral", "nod", text);
+}
+$("talkForm").addEventListener("submit", e => { e.preventDefault(); const v = $("talkInput").value.trim(); if (!v) return; $("talkInput").value = ""; respond(v); });
+
+let demoRun = 0;
+$("demoBtn").addEventListener("click", async () => {
+  const id = ++demoRun;
+  const go = async fn => { if (id !== demoRun) throw 0; await fn(); await new Promise(r => setTimeout(r, 700)); };
+  try {
+    await go(() => say("Hi! I'm Zuri. I came a long way to help you out. What do you need?", "happy", "wave"));
+    await go(() => say("Hmm, let me look that up...", "thinking", null, "What's the tallest tree in the world?"));
+    await go(() => say("Found it! A coast redwood called Hyperion. It's about 116 meters tall. We don't have trees like that back home!", "surprised", null));
+    await go(() => say("Oh no, I'm sorry. That's rough. Want me to set a reminder to book a retake?", "sad", null, "I failed my driving test today."));
+    await go(() => say("Done! Reminder set for Monday at 9 AM. You've got this.", "happy", "nod", "Yes please"));
+    await go(() => say("Why did the alien skip the party? It needed more space!", "laughing", "jump", "Tell me a joke"));
+  } catch {}
+});
+
+/* ---------- panel controls ---------- */
+const exprBox = $("exprChips");
+Object.keys(EXPR).forEach(m => {
+  const b = document.createElement("button"); b.type = "button"; b.className = "ghost"; b.dataset.m = m; b.textContent = m[0].toUpperCase() + m.slice(1);
+  b.addEventListener("click", () => { clearTimeout(moodTimer); setMood(m); }); exprBox.appendChild(b);
+});
+const gestBox = $("gestChips");
+Object.keys(GESTURES).forEach(g => {
+  const b = document.createElement("button"); b.type = "button"; b.className = "ghost"; b.textContent = g[0].toUpperCase() + g.slice(1);
+  b.addEventListener("click", () => doGesture(g)); gestBox.appendChild(b);
+});
+const skinBox = $("skinChips");
+Object.entries(SKINS).forEach(([name, hex]) => {
+  const b = document.createElement("button"); b.type = "button"; b.className = "swatch"; b.dataset.c = hex; b.style.background = hex;
+  b.setAttribute("aria-label", name); b.title = name; b.addEventListener("click", () => setSkin(hex)); skinBox.appendChild(b);
+});
+setSkin(SKINS.Mint);
+setMood("happy"); doGesture("wave");
+saysEl.textContent = "Hi! I'm Zuri. Press “Play demo conversation”, or drag to look at me from any side.";
+moodTimer = setTimeout(() => setMood("neutral"), 3000);
+})();
+</script>

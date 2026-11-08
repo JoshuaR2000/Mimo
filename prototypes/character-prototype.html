@@ -1,0 +1,757 @@
+<title>Assistant Face Rig</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: one big stage (the character) beside a control panel; stacks on narrow screens. */
+:root {
+  --bg: #EEF1F4;
+  --surface: #FFFFFF;
+  --ink: #18202B;
+  --muted: #5B6676;
+  --line: #D9DFE7;
+  --accent: #3355D1;
+  --accent-ink: #FFFFFF;
+  --chip: #E4E9F2;
+  --stage-top: #2A3A52;
+  --stage-bot: #141C29;
+  --caption-bg: rgba(10, 15, 24, 0.72);
+  --caption-ink: #F4F6FA;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F141C; --surface: #18202B; --ink: #E8ECF2; --muted: #98A3B4; --line: #2A3442;
+    --accent: #8EA6FF; --accent-ink: #0F141C; --chip: #222C3A;
+    --stage-top: #24334A; --stage-bot: #0B1119; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F141C; --surface: #18202B; --ink: #E8ECF2; --muted: #98A3B4; --line: #2A3442;
+  --accent: #8EA6FF; --accent-ink: #0F141C; --chip: #222C3A;
+  --stage-top: #24334A; --stage-bot: #0B1119; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 40px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: grid; gap: 4px; }
+.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 4vw, 40px); line-height: 1.1; margin: 0; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); max-width: 64ch; }
+.layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.stage {
+  position: relative; border-radius: 22px; overflow: hidden;
+  background: radial-gradient(120% 80% at 50% 25%, var(--stage-top), var(--stage-bot));
+  aspect-ratio: 500 / 540; max-width: 100%;
+}
+@media (min-width: 861px) { .stage { position: sticky; top: calc(16px + env(safe-area-inset-top, 0px)); } }
+.stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.mood {
+  position: absolute; top: 14px; left: 14px; font-family: var(--font-mono); font-size: 12px;
+  color: var(--caption-ink); background: var(--caption-bg); border-radius: 999px; padding: 5px 11px;
+}
+.mood b { font-weight: 400; color: #FFD66B; }
+.caption {
+  position: absolute; left: 14px; right: 14px; bottom: 14px; display: grid; gap: 6px;
+  pointer-events: none;
+}
+.caption .you, .caption .says {
+  background: var(--caption-bg); color: var(--caption-ink); border-radius: 14px; padding: 9px 13px;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.caption .you { justify-self: end; max-width: 85%; font-size: 14px; color: #C9D3E3; }
+.caption .says { font-size: 16px; min-height: 1.5em; }
+.caption .you:empty, .caption .says:empty { display: none; }
+
+.panel { display: grid; gap: 14px; min-width: 0; }
+.group { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
+.group h2 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 0; }
+.group .hint { margin: 0; color: var(--muted); font-size: 13.5px; }
+form.row { display: flex; gap: 8px; }
+input[type="text"] {
+  flex: 1; min-width: 0; font: inherit; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px;
+}
+button {
+  font: inherit; font-weight: 700; cursor: pointer; border-radius: 10px; padding: 9px 14px;
+  border: 1px solid transparent; background: var(--accent); color: var(--accent-ink);
+}
+button.ghost { background: var(--chip); color: var(--ink); font-weight: 400; padding: 7px 12px; }
+button.ghost[aria-pressed="true"] { border-color: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+label.toggle { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14px; cursor: pointer; }
+pre {
+  margin: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--ink);
+  background: var(--bg); border-radius: 10px; padding: 12px; max-height: 260px; overflow: auto;
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Prototype · character rig</span>
+    <h1>Assistant Face Rig</h1>
+    <p>One animated face that can become any character. In the Apple app, Claude writes the replies and picks the mood; this prototype shows how the character looks and reacts.</p>
+  </header>
+
+  <div class="layout">
+    <section class="stage" aria-label="Animated assistant character">
+      <canvas id="cv"></canvas>
+      <div class="mood">mood: <b id="moodLabel">neutral</b></div>
+      <div class="caption" aria-live="polite">
+        <div class="you" id="you"></div>
+        <div class="says" id="says"></div>
+      </div>
+    </section>
+
+    <div class="panel">
+      <div class="group">
+        <h2>Talk to it</h2>
+        <form class="row" id="talkForm">
+          <input type="text" id="talkInput" placeholder="Try “I passed my exam!” or “make yourself a lion”" autocomplete="off">
+          <button type="submit">Send</button>
+        </form>
+        <div class="toolbar">
+          <button class="ghost" id="demoBtn" type="button">Play demo conversation</button>
+          <label class="toggle"><input type="checkbox" id="voiceOn" checked> Speak out loud</label>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>Make yourself a…</h2>
+        <form class="row" id="makeForm">
+          <input type="text" id="makeInput" placeholder="purple owl, robot, tiger…" autocomplete="off">
+          <button type="submit">Become</button>
+        </form>
+        <div class="chips" id="presetChips"></div>
+      </div>
+
+      <div class="group">
+        <h2>Expressions</h2>
+        <div class="chips" id="exprChips"></div>
+        <h2>Gestures</h2>
+        <div class="chips" id="gestChips"></div>
+      </div>
+
+      <div class="group">
+        <h2>Character spec</h2>
+        <p class="hint">In the app, Claude writes this when someone says “make yourself a ___”. The rig turns it into an animated character.</p>
+        <pre id="specOut"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- color helpers ---------- */
+const hexToRgb = h => { h = h.replace("#",""); return [0,2,4].map(i => parseInt(h.slice(i,i+2),16)); };
+const rgbToHex = ([r,g,b]) => "#" + [r,g,b].map(v => Math.round(Math.max(0,Math.min(255,v))).toString(16).padStart(2,"0")).join("");
+const mix = (a, b, t) => { const A = hexToRgb(a), B = hexToRgb(b); return rgbToHex(A.map((v,i) => v + (B[i]-v)*t)); };
+const lighten = (c, t) => mix(c, "#ffffff", t);
+const darken = (c, t) => mix(c, "#000000", t);
+const hslHex = (h, s, l) => {
+  s /= 100; l /= 100;
+  const k = n => (n + h/30) % 12, a = s * Math.min(l, 1-l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)));
+  return rgbToHex([f(0)*255, f(8)*255, f(4)*255]);
+};
+
+/* ---------- character presets (what Claude would return as a spec) ---------- */
+const PRESETS = {
+  lion:    { name:"Leo", head:{shape:"round",color:"#E3A64F"}, mane:"#A4561D", muzzle:"#F7E0B5",
+             ears:{type:"round",color:"#D08F3C",inner:"#F3C98C"}, pattern:{type:"none"},
+             eyes:{style:"dot",color:"#2A1A12",size:1}, brows:"#7A3E14", nose:{type:"triangle",color:"#5A2E1C"},
+             mouth:"#4A1E14", whiskers:null, body:{color:"#DDA04A",belly:"#F7E0B5"}, voice:{pitch:0.85} },
+  fox:     { name:"Juniper", head:{shape:"round",color:"#E8782F"}, mane:null, muzzle:null,
+             ears:{type:"pointy",color:"#E06B26",inner:"#3A2219"}, pattern:{type:"mask",color:"#FFF3E4"},
+             eyes:{style:"dot",color:"#24160F",size:1}, brows:"#9B4614", nose:{type:"button",color:"#24160F"},
+             mouth:"#3A1A10", whiskers:"#6B4A38", body:{color:"#E8782F",belly:"#FFF3E4"}, voice:{pitch:1.25} },
+  robot:   { name:"Bolt", head:{shape:"rect",color:"#A9BCCB"}, mane:null, muzzle:null,
+             ears:{type:"antenna",color:"#7E95A6",inner:"#6FF3E0"}, pattern:{type:"screen",color:"#1C2833"},
+             eyes:{style:"screen",color:"#6FF3E0",size:1}, brows:"#6FF3E0", nose:{type:"none"},
+             mouth:"#6FF3E0", mouthStyle:"glow", whiskers:null, body:{color:"#8FA5B6",belly:"#C9D6E0"}, voice:{pitch:0.7} },
+  owl:     { name:"Hoot", head:{shape:"round",color:"#8A6A50"}, mane:null, muzzle:null,
+             ears:{type:"tufts",color:"#6E523C"}, pattern:{type:"faceDisc",color:"#EBDDC6"},
+             eyes:{style:"white",color:"#2A1C12",size:1.45}, brows:"#4A3526", nose:{type:"beak",color:"#E9A93B"},
+             mouth:null, whiskers:null, body:{color:"#7D5F47",belly:"#E3D0B4"}, voice:{pitch:1.1} },
+  bear:    { name:"Bruno", head:{shape:"round",color:"#8A5D3B"}, mane:null, muzzle:"#D8B48E",
+             ears:{type:"round",color:"#7A4F31",inner:"#C99A73"}, pattern:{type:"none"},
+             eyes:{style:"dot",color:"#1F140D",size:0.95}, brows:"#4E321F", nose:{type:"button",color:"#2B1B12"},
+             mouth:"#2B1B12", whiskers:null, body:{color:"#8A5D3B",belly:"#C99A73"}, voice:{pitch:0.75} },
+  cat:     { name:"Miso", head:{shape:"wide",color:"#A0A6AE"}, mane:null, muzzle:"#E9ECEF",
+             ears:{type:"pointy",color:"#9097A0",inner:"#F2B3BE"}, pattern:{type:"stripes",color:"#7C838C"},
+             eyes:{style:"dot",color:"#1E2A22",size:1.05}, brows:"#6A717A", nose:{type:"triangle",color:"#E98A9B"},
+             mouth:"#4A3238", whiskers:"#5E646C", body:{color:"#A0A6AE",belly:"#E9ECEF"}, voice:{pitch:1.35} },
+  tiger:   { name:"Raja", head:{shape:"wide",color:"#EE8A2B"}, mane:null, muzzle:"#FFF2E0",
+             ears:{type:"round",color:"#E07E22",inner:"#FFF2E0"}, pattern:{type:"stripes",color:"#2A1A12"},
+             eyes:{style:"dot",color:"#2A1A12",size:1}, brows:"#2A1A12", nose:{type:"triangle",color:"#C5534A"},
+             mouth:"#3A1A10", whiskers:"#3A2A20", body:{color:"#EE8A2B",belly:"#FFF2E0"}, voice:{pitch:0.8} },
+  panda:   { name:"Bao", head:{shape:"wide",color:"#F4F4F2"}, mane:null, muzzle:null,
+             ears:{type:"round",color:"#1E1E22",inner:"#1E1E22"}, pattern:{type:"patches",color:"#1E1E22"},
+             eyes:{style:"white",color:"#1E1E22",size:0.9}, brows:null, nose:{type:"button",color:"#1E1E22"},
+             mouth:"#1E1E22", whiskers:null, body:{color:"#1E1E22",belly:"#F4F4F2"}, voice:{pitch:1.0} },
+  frog:    { name:"Pip", head:{shape:"wide",color:"#6DBE5A"}, mane:null, muzzle:null,
+             ears:{type:"none"}, pattern:{type:"none"},
+             eyes:{style:"white",color:"#1C2A14",size:1.3,y:-0.55,x:0.46,bulge:true}, brows:"#3F7A31",
+             nose:{type:"nostrils",color:"#2D4A22"}, mouth:"#2D4A22", mouthWidth:1.7, mouthY:0.4,
+             whiskers:null, body:{color:"#5DAE4B",belly:"#CFE8A8"}, voice:{pitch:1.5} },
+  dragon:  { name:"Ember", head:{shape:"round",color:"#3FA58A"}, mane:null, muzzle:"#8FD3B8",
+             ears:{type:"horns",color:"#F1E3C4"}, pattern:{type:"none"},
+             eyes:{style:"dot",color:"#2B1305",size:1}, brows:"#1F5A49", nose:{type:"nostrils",color:"#1F5A49"},
+             mouth:"#1F3A30", whiskers:null, body:{color:"#3FA58A",belly:"#F5D88A"}, voice:{pitch:0.65} },
+  bunny:   { name:"Clover", head:{shape:"round",color:"#F1EAE3"}, mane:null, muzzle:"#FFFFFF",
+             ears:{type:"long",color:"#ECE3DA",inner:"#F4B6C2"}, pattern:{type:"none"},
+             eyes:{style:"dot",color:"#2A1E1A",size:1}, brows:"#B8A79A", nose:{type:"triangle",color:"#E88A9E"},
+             mouth:"#5A3A3E", whiskers:"#A89A90", body:{color:"#F1EAE3",belly:"#FFFFFF"}, voice:{pitch:1.45} },
+  dog:     { name:"Biscuit", head:{shape:"round",color:"#C8925A"}, mane:null, muzzle:"#F1D9B8",
+             ears:{type:"floppy",color:"#7A5233"}, pattern:{type:"none"},
+             eyes:{style:"dot",color:"#24160F",size:1.05}, brows:"#7A5233", nose:{type:"button",color:"#2A1B12"},
+             mouth:"#3A1A10", whiskers:null, body:{color:"#C8925A",belly:"#F1D9B8"}, voice:{pitch:1.1} },
+  penguin: { name:"Waddles", head:{shape:"round",color:"#22262E"}, mane:null, muzzle:null,
+             ears:{type:"none"}, pattern:{type:"heart",color:"#F7F7F5"},
+             eyes:{style:"dot",color:"#15181D",size:0.95}, brows:"#22262E", nose:{type:"beak",color:"#F2A33A"},
+             mouth:null, whiskers:null, body:{color:"#22262E",belly:"#F7F7F5"}, voice:{pitch:1.2} },
+};
+const ALIASES = { kitty:"cat", kitten:"cat", lioness:"lion", rabbit:"bunny", bot:"robot", android:"robot", droid:"robot",
+  puppy:"dog", pup:"dog", doggo:"dog", wolf:"dog", bird:"owl", toad:"frog", dino:"dragon", dinosaur:"dragon", bear:"bear", teddy:"bear" };
+const COLORS = { red:"#D9473F", blue:"#3F7BD9", green:"#4FAE5A", purple:"#8A5BD1", pink:"#EC8FB6", yellow:"#F1C84A",
+  orange:"#EE8A2B", black:"#26282E", white:"#F3F3F1", gray:"#9AA0A8", grey:"#9AA0A8", gold:"#D9A93A", teal:"#2FA59A", brown:"#8A5D3B", silver:"#B9C2CC" };
+
+/* ---------- expressions: target values for the face ---------- */
+const BASE = { browY:0, browTilt:0, browAsym:0, eyeOpen:1, eyeHappy:0, mouthCurve:0.35, mouthOpen:0, mouthRound:0, tilt:0, blush:0, lookX:0, lookY:0 };
+const EXPR = {
+  neutral:   {},
+  happy:     { browY:-7, browTilt:-0.05, eyeHappy:0.9, mouthCurve:1, mouthOpen:0.3, tilt:0.06, blush:0.7 },
+  laughing:  { browY:-10, browTilt:-0.1, eyeHappy:1, mouthCurve:1, mouthOpen:0.85, tilt:-0.05, blush:0.9 },
+  sad:       { browY:-2, browTilt:-0.38, eyeOpen:0.78, mouthCurve:-0.85, tilt:-0.1, lookY:0.7 },
+  surprised: { browY:-16, browTilt:-0.08, eyeOpen:1.25, mouthCurve:0, mouthOpen:0.75, mouthRound:1 },
+  thinking:  { browY:-3, browTilt:0.1, browAsym:-9, eyeOpen:0.92, mouthCurve:-0.15, tilt:0.13, lookX:0.8, lookY:-0.8 },
+  concerned: { browY:5, browTilt:0.38, eyeOpen:0.85, mouthCurve:-0.6 },
+};
+Object.keys(EXPR).forEach(k => EXPR[k] = Object.assign({}, BASE, EXPR[k]));
+const GESTURES = ["wave","nod","shake","bounce"];
+
+/* ---------- state ---------- */
+let spec = structuredClone(PRESETS.lion); spec.species = "lion";
+let mood = "neutral";
+const cur = Object.assign({}, BASE);
+let speaking = false, blink = 0, nextBlink = 1.5, blinkT = -1;
+let gesture = null, gestureT = 0;
+let pointer = null, glance = {x:0,y:0}, nextGlance = 3;
+let pop = null; const particles = [];
+let moodTimer = null;
+
+/* ---------- canvas setup ---------- */
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const W = 500, H = 540;
+let scale = 1;
+function resize() {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+  scale = (r.width / W) * dpr;
+}
+new ResizeObserver(resize).observe(cv); resize();
+
+cv.addEventListener("pointermove", e => {
+  const r = cv.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
+  pointer = { x: Math.max(-1, Math.min(1, (x - 250) / 170)), y: Math.max(-1, Math.min(1, (y - 230) / 170)) };
+});
+cv.addEventListener("pointerleave", () => pointer = null);
+
+/* ---------- drawing ---------- */
+const ell = (x,y,rx,ry,rot=0) => { ctx.beginPath(); ctx.ellipse(x,y,Math.max(0.1,rx),Math.max(0.1,ry),rot,0,Math.PI*2); };
+const rrect = (x,y,w,h,r) => { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x,y,w,h,r) : ctx.rect(x,y,w,h); };
+const fill = c => { ctx.fillStyle = c; ctx.fill(); };
+
+function headPath(R) {
+  const s = spec.head.shape;
+  if (s === "rect") rrect(-R, -R*0.88, 2*R, 1.8*R, R*0.35);
+  else if (s === "wide") ell(0, 0, R*1.1, R*0.9);
+  else ell(0, 0, R, R*0.95);
+}
+
+function drawEarsBehind(R, droop) {
+  const e = spec.ears, t = e.type;
+  for (const side of [-1, 1]) {
+    ctx.save();
+    if (t === "round") {
+      ell(side*R*0.72, -R*0.7, R*0.28, R*0.28); fill(e.color);
+      ell(side*R*0.72, -R*0.7, R*0.16, R*0.16); fill(e.inner);
+    } else if (t === "pointy") {
+      ctx.translate(side*R*0.6, -R*0.6); ctx.rotate(side*droop*0.5); ctx.translate(-side*R*0.6, R*0.6);
+      const tri = (k, c) => {
+        const cx = side*R*0.66, cy = -R*0.84;
+        const pts = [[side*R*0.26,-R*0.72],[side*R*0.95,-R*0.42],[side*R*0.8,-R*1.34]];
+        ctx.beginPath(); pts.forEach(([x,y],i) => { const px = cx+(x-cx)*k, py = cy+(y-cy)*k; i ? ctx.lineTo(px,py) : ctx.moveTo(px,py); });
+        ctx.closePath(); ctx.lineJoin = "round"; ctx.lineWidth = R*0.06; ctx.strokeStyle = c; ctx.stroke(); fill(c);
+      };
+      tri(1, e.color); tri(0.55, e.inner);
+    } else if (t === "long") {
+      ctx.translate(side*R*0.36, -R*0.75); ctx.rotate(side*(0.18 + droop*0.9));
+      ell(0, -R*0.45, R*0.2, R*0.6); fill(e.color);
+      ell(0, -R*0.42, R*0.1, R*0.45); fill(e.inner);
+    } else if (t === "antenna" && side === 1) {
+      ctx.beginPath(); ctx.moveTo(0, -R*0.85); ctx.lineTo(0, -R*1.3); ctx.lineWidth = R*0.05; ctx.strokeStyle = e.color; ctx.stroke();
+      ctx.shadowColor = e.inner; ctx.shadowBlur = 18 + 10*Math.sin(performance.now()/300);
+      ell(0, -R*1.34, R*0.09, R*0.09); fill(e.inner);
+    } else if (t === "tufts") {
+      ctx.beginPath(); ctx.moveTo(side*R*0.4,-R*0.78); ctx.lineTo(side*R*0.98,-R*0.5); ctx.lineTo(side*R*0.98,-R*1.18); ctx.closePath(); fill(e.color);
+    } else if (t === "horns") {
+      ctx.beginPath(); ctx.moveTo(side*R*0.32,-R*0.72);
+      ctx.quadraticCurveTo(side*R*0.5,-R*1.3, side*R*0.86,-R*1.42);
+      ctx.quadraticCurveTo(side*R*0.62,-R*1.05, side*R*0.66,-R*0.6); ctx.closePath(); fill(e.color);
+    }
+    ctx.restore();
+  }
+}
+
+function drawEarsFront(R, droop) {
+  const e = spec.ears;
+  if (spec.head.shape === "rect" && e.type === "antenna") {
+    for (const side of [-1,1]) { rrect(side*R*1.0 - R*0.07, -R*0.18, R*0.14, R*0.36, R*0.05); fill(e.color); }
+  }
+  if (e.type === "floppy") {
+    for (const side of [-1,1]) {
+      ctx.save(); ctx.translate(side*R*0.78, -R*0.45); ctx.rotate(side*(-0.22 + droop*0.6));
+      ell(0, R*0.32, R*0.22, R*0.5); fill(e.color); ctx.restore();
+    }
+  }
+}
+
+function drawPattern(R, ex, ey) {
+  const p = spec.pattern; if (!p || p.type === "none") return;
+  ctx.save(); headPath(R); ctx.clip(); ctx.fillStyle = p.color;
+  if (p.type === "stripes") {
+    for (const i of [-1,0,1]) { ctx.beginPath(); ctx.moveTo(i*R*0.24-R*0.06,-R); ctx.lineTo(i*R*0.24+R*0.06,-R); ctx.lineTo(i*R*0.2,-R*0.55); ctx.closePath(); ctx.fill(); }
+    for (const side of [-1,1]) for (let j = 0; j < 3; j++) {
+      const y = -R*0.15 + j*R*0.28;
+      ctx.beginPath(); ctx.moveTo(side*R*1.15, y); ctx.lineTo(side*R*1.15, y+R*0.14); ctx.lineTo(side*R*0.72, y+R*0.02); ctx.closePath(); ctx.fill();
+    }
+  } else if (p.type === "patches") {
+    for (const side of [-1,1]) { ell(side*ex, ey+R*0.04, R*0.19, R*0.25, side*0.5); ctx.fill(); }
+  } else if (p.type === "mask") {
+    for (const side of [-1,1]) { ell(side*R*0.42, R*0.36, R*0.5, R*0.46); ctx.fill(); }
+  } else if (p.type === "heart") {
+    for (const side of [-1,1]) { ell(side*R*0.34, -R*0.04, R*0.42, R*0.42); ctx.fill(); }
+    ell(0, R*0.38, R*0.62, R*0.52); ctx.fill();
+  } else if (p.type === "faceDisc") {
+    for (const side of [-1,1]) { ell(side*R*0.4, -R*0.02, R*0.44, R*0.46); ctx.fill(); }
+  } else if (p.type === "screen") {
+    rrect(-R*0.8, -R*0.62, R*1.6, R*1.3, R*0.26); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawEyes(R, s, ex, ey, er) {
+  const e = spec.eyes;
+  const open = Math.max(0.05, Math.min(1.3, s.eyeOpen * (1 - blink)));
+  const lx = s.lookX, ly = s.lookY;
+  for (const side of [-1,1]) {
+    const x = side*ex;
+    ctx.save(); ctx.globalAlpha = 1 - s.eyeHappy;
+    if (e.style === "white") {
+      ell(x, ey, er*1.05, er*1.05*open); fill("#FFFFFF");
+      ctx.save(); ctx.clip();
+      ell(x + lx*er*0.35, ey + ly*er*0.35, er*0.58, er*0.58); fill(e.color);
+      ell(x + lx*er*0.35 - er*0.2, ey + ly*er*0.35 - er*0.22, er*0.17, er*0.17); fill("#FFFFFF");
+      ctx.restore();
+    } else if (e.style === "screen") {
+      ctx.shadowColor = e.color; ctx.shadowBlur = 16;
+      const w = er*1.3, h = er*1.7*open;
+      rrect(x - w/2 + lx*er*0.25, ey - h/2 + ly*er*0.25, w, h, Math.min(w,h)*0.45); fill(e.color);
+    } else {
+      ell(x + lx*er*0.22, ey + ly*er*0.22, er*0.8, er*open); fill(e.color);
+      if (open > 0.35) { ell(x + lx*er*0.22 - er*0.26, ey + ly*er*0.22 - er*0.36*open, er*0.24, er*0.24); fill("rgba(255,255,255,0.9)"); }
+    }
+    ctx.globalAlpha = s.eyeHappy;
+    if (e.style === "screen") { ctx.shadowColor = e.color; ctx.shadowBlur = 16; }
+    ctx.beginPath(); ctx.arc(x, ey + er*0.4, er*0.85, Math.PI*1.12, Math.PI*1.88);
+    ctx.lineCap = "round"; ctx.lineWidth = er*0.42; ctx.strokeStyle = e.style === "white" ? spec.eyes.color : e.color; ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawBrows(R, s, ex, ey, er) {
+  if (!spec.brows) return;
+  const by = ey - er*(spec.eyes.style === "white" ? 1.45 : 1.35) - R*0.08;
+  for (const side of [-1,1]) {
+    ctx.save();
+    ctx.translate(side*ex, by + s.browY*R/100 + (side < 0 ? s.browAsym*R/100 : 0));
+    ctx.rotate(-side * s.browTilt);
+    ctx.beginPath(); ctx.moveTo(-R*0.12, R*0.01); ctx.quadraticCurveTo(0, -R*0.035, R*0.12, R*0.01);
+    ctx.lineCap = "round"; ctx.lineWidth = R*0.06; ctx.strokeStyle = spec.brows;
+    if (spec.mouthStyle === "glow") { ctx.shadowColor = spec.brows; ctx.shadowBlur = 12; }
+    ctx.stroke(); ctx.restore();
+  }
+}
+
+function drawNose(R, mouthOpen) {
+  const n = spec.nose; if (!n || n.type === "none") return;
+  const ny = (n.y ?? 0.22) * R;
+  ctx.fillStyle = n.color; ctx.strokeStyle = n.color; ctx.lineJoin = "round";
+  if (n.type === "triangle") {
+    ctx.beginPath(); ctx.moveTo(-R*0.1, ny-R*0.04); ctx.lineTo(R*0.1, ny-R*0.04); ctx.lineTo(0, ny+R*0.07); ctx.closePath();
+    ctx.lineWidth = R*0.04; ctx.stroke(); ctx.fill();
+  } else if (n.type === "button") {
+    ell(0, ny, R*0.09, R*0.065); ctx.fill();
+    ell(-R*0.03, ny-R*0.025, R*0.025, R*0.015); fill("rgba(255,255,255,0.5)");
+  } else if (n.type === "nostrils") {
+    for (const side of [-1,1]) { ell(side*R*0.07, ny, R*0.025, R*0.018); ctx.fill(); }
+  } else if (n.type === "beak") {
+    const o = mouthOpen * R * 0.22;
+    ctx.beginPath(); ctx.moveTo(-R*0.08, ny+R*0.02+o*0.25); ctx.lineTo(R*0.08, ny+R*0.02+o*0.25); ctx.lineTo(0, ny+R*0.15+o*0.7); ctx.closePath();
+    fill(darken(n.color, 0.2));
+    ctx.beginPath(); ctx.moveTo(-R*0.12, ny-R*0.06); ctx.lineTo(R*0.12, ny-R*0.06); ctx.lineTo(0, ny+R*0.14); ctx.closePath();
+    ctx.lineWidth = R*0.03; ctx.strokeStyle = n.color; ctx.stroke(); fill(n.color);
+  }
+}
+
+function drawMouth(R, s, mouthOpen) {
+  if (!spec.mouth) return;
+  const my = (spec.mouthY ?? 0.47) * R;
+  const w = R*0.2*(spec.mouthWidth || 1)*(1 - 0.5*s.mouthRound);
+  const c = s.mouthCurve * R * 0.1;
+  const o = mouthOpen * R * 0.22;
+  const glow = spec.mouthStyle === "glow";
+  ctx.save(); ctx.translate(0, my);
+  if (glow) { ctx.shadowColor = spec.mouth; ctx.shadowBlur = 14; }
+  ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = spec.mouth; ctx.lineWidth = R*0.04;
+  if (o < 1.5) {
+    ctx.beginPath(); ctx.moveTo(-w, -c); ctx.quadraticCurveTo(0, c, w, -c); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.moveTo(-w, -c);
+    ctx.quadraticCurveTo(0, c*0.9 - o*(0.15 + 0.9*s.mouthRound), w, -c);
+    ctx.quadraticCurveTo(0, c + o*1.6, -w, -c); ctx.closePath();
+    ctx.fillStyle = glow ? "#0E161D" : spec.mouth; ctx.fill();
+    if (!glow) {
+      ctx.save(); ctx.clip(); ell(0, c + o*1.05, w*0.6, o*0.55); fill("#E46A7A"); ctx.restore();
+    }
+    ctx.lineWidth = R*0.03; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawWhiskers(R) {
+  if (!spec.whiskers) return;
+  ctx.strokeStyle = spec.whiskers; ctx.lineWidth = 2; ctx.lineCap = "round";
+  for (const side of [-1,1]) for (let i = 0; i < 3; i++) {
+    ctx.beginPath(); ctx.moveTo(side*R*0.3, R*0.3 + i*R*0.06); ctx.lineTo(side*R*0.88, R*0.18 + i*R*0.14); ctx.stroke();
+  }
+}
+
+function drawArm(R, side, raise, t) {
+  const sx = side*R*0.76, sy = R*1.3;
+  const restX = side*R*0.42, restY = R*1.66;
+  const upX = side*R*1.2 + Math.sin(t*14)*R*0.13*raise, upY = R*0.2;
+  const hx = restX + (upX - restX)*raise, hy = restY + (upY - restY)*raise;
+  ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(hx, hy);
+  ctx.lineCap = "round"; ctx.lineWidth = R*0.3; ctx.strokeStyle = spec.body.color; ctx.stroke();
+  ell(hx, hy, R*0.18, R*0.18); fill(darken(spec.body.color, 0.06));
+}
+
+function draw(t, dt) {
+  const R = 105;
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  // gestures
+  let gx = 0, gy = 0, gTilt = 0, bounce = 0, raise = 0;
+  if (gesture) {
+    gestureT += dt;
+    const dur = gesture === "wave" ? 2.2 : 1.3, p = gestureT / dur;
+    if (p >= 1) gesture = null;
+    else {
+      const env = Math.sin(Math.PI * Math.min(1, p));
+      if (gesture === "nod") gy = Math.sin(gestureT*11) * 9 * env;
+      if (gesture === "shake") { gx = Math.sin(gestureT*12) * 11 * env; gTilt = Math.sin(gestureT*12) * 0.04 * env; }
+      if (gesture === "bounce") bounce = -Math.abs(Math.sin(gestureT*9)) * 22 * env;
+      if (gesture === "wave") raise = Math.min(1, Math.min(p, 1-p) * 6);
+    }
+  }
+  const idle = reduceMotion ? 0 : 1;
+  const bob = Math.sin(t*2.1) * 3 * idle;
+  const sway = Math.sin(t*0.7) * 0.025 * idle;
+
+  // transformation pop
+  let sx = 1, sy = 1;
+  if (pop) {
+    pop.t += dt; const p = pop.t / 0.55;
+    if (p >= 0.5 && !pop.swapped) { pop.swapped = true; pop.apply(); burst(); }
+    if (p >= 1) pop = null; else { const k = Math.sin(Math.PI*p); sx = 1 + 0.12*k; sy = 1 - 0.32*k; }
+  }
+
+  // floor shadow
+  ell(250, 520, 150, 18); fill("rgba(0,0,0,0.25)");
+
+  ctx.save();
+  ctx.translate(250, 210 + bob*0.4 + bounce);
+  ctx.translate(0, R*1.4); ctx.scale(sx, sy); ctx.translate(0, -R*1.4);
+
+  // body
+  if (spec.head.shape === "rect") { rrect(-R*0.9, R*1.0, R*1.8, R*1.6, R*0.3); fill(spec.body.color); rrect(-R*0.5, R*1.25, R*1.0, R*0.8, R*0.18); fill(spec.body.belly); }
+  else { ell(0, R*1.9, R*0.95, R*0.95); fill(spec.body.color); ell(0, R*2.0, R*0.56, R*0.72); fill(spec.body.belly); }
+  drawArm(R, -1, 0, t);
+  if (raise < 0.35) drawArm(R, 1, raise, t);
+
+  // head
+  ctx.save();
+  ctx.translate(gx, bob + gy);
+  ctx.rotate(cur.tilt + sway + gTilt);
+  const droop = Math.max(0, -cur.mouthCurve) * 0.5;
+  const er = R*0.12*(spec.eyes.size || 1), ex = (spec.eyes.x ?? 0.38)*R, ey = (spec.eyes.y ?? -0.08)*R;
+
+  if (spec.mane) {
+    const n = 16;
+    for (let i = 0; i < n; i++) { const a = (i/n)*Math.PI*2 + Math.sin(t*1.3)*0.02; ell(Math.cos(a)*R*1.02, Math.sin(a)*R*0.98 + R*0.05, R*0.34, R*0.34); fill(spec.mane); }
+    for (let i = 0; i < n; i++) { const a = ((i+0.5)/n)*Math.PI*2; ell(Math.cos(a)*R*0.92, Math.sin(a)*R*0.9 + R*0.05, R*0.24, R*0.24); fill(lighten(spec.mane, 0.15)); }
+  }
+  drawEarsBehind(R, droop);
+  if (spec.eyes.bulge) for (const side of [-1,1]) { ell(side*ex, ey, er*1.6, er*1.6); fill(spec.head.color); }
+  headPath(R); fill(spec.head.color);
+  drawPattern(R, ex, ey);
+  if (spec.muzzle) { ell(0, R*0.36, R*0.46, R*0.34); fill(spec.muzzle); }
+  if (cur.blush > 0.02 && spec.mouthStyle !== "glow") {
+    for (const side of [-1,1]) { ell(side*R*0.62, R*0.24, R*0.14, R*0.08); fill(`rgba(240,110,130,${0.45*cur.blush})`); }
+  }
+  drawEarsFront(R, droop);
+
+  const flap = speaking ? (0.18 + 0.5*Math.abs(Math.sin(t*15))*(0.65 + 0.35*Math.sin(t*4.7))) : 0;
+  const mOpen = Math.max(cur.mouthOpen, flap);
+  drawEyes(R, cur, ex, ey, er);
+  drawBrows(R, cur, ex, ey, er);
+  drawMouth(R, cur, mOpen);
+  drawNose(R, mOpen);
+  drawWhiskers(R);
+  ctx.restore();
+
+  if (raise >= 0.35) drawArm(R, 1, raise, t);
+  ctx.restore();
+
+  // particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i]; p.life -= dt;
+    if (p.life <= 0) { particles.splice(i,1); continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 120*dt;
+    ctx.globalAlpha = Math.min(1, p.life*2); ell(p.x, p.y, p.r, p.r); fill(p.c); ctx.globalAlpha = 1;
+  }
+}
+
+function burst() {
+  const cols = ["#FFD66B", "#FFFFFF", spec.head.color, spec.body.belly];
+  for (let i = 0; i < 26; i++) {
+    const a = Math.random()*Math.PI*2, v = 140 + Math.random()*180;
+    particles.push({ x:250, y:210, vx:Math.cos(a)*v, vy:Math.sin(a)*v - 60, r:3 + Math.random()*5, life:0.7 + Math.random()*0.5, c:cols[i % cols.length] });
+  }
+}
+
+/* ---------- animation loop ---------- */
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; const t = now / 1000;
+  const target = Object.assign({}, EXPR[mood]);
+  if (mood === "neutral" || mood === "happy") {
+    if (pointer) { target.lookX = pointer.x; target.lookY = pointer.y; }
+    else {
+      nextGlance -= dt;
+      if (nextGlance <= 0) { glance = Math.random() < 0.5 ? {x:0,y:0} : {x:(Math.random()*2-1)*0.8, y:(Math.random()*2-1)*0.5}; nextGlance = 1.5 + Math.random()*3; }
+      target.lookX = glance.x; target.lookY = glance.y;
+    }
+  }
+  const k = 1 - Math.exp(-dt * 9);
+  for (const key in target) cur[key] += (target[key] - cur[key]) * k;
+
+  nextBlink -= dt;
+  if (nextBlink <= 0 && blinkT < 0) { blinkT = 0; nextBlink = 2 + Math.random()*3.5; }
+  if (blinkT >= 0) { blinkT += dt; const p = blinkT / 0.16; blink = p < 1 ? Math.sin(Math.PI*p) : 0; if (p >= 1) blinkT = -1; }
+
+  draw(t, dt);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ---------- controls ---------- */
+const $ = id => document.getElementById(id);
+const moodLabel = $("moodLabel"), saysEl = $("says"), youEl = $("you"), specOut = $("specOut");
+
+function setMood(m) {
+  mood = m; moodLabel.textContent = m;
+  document.querySelectorAll("#exprChips button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.m === m)));
+}
+function doGesture(g) { gesture = g; gestureT = 0; }
+function showSpec() {
+  const { species, ...rest } = spec;
+  specOut.textContent = JSON.stringify({ species, ...rest }, null, 2);
+}
+
+let sayId = 0, typeTimer = null;
+function say(text, m = "neutral", g = null, you = null) {
+  const id = ++sayId;
+  clearTimeout(moodTimer); clearInterval(typeTimer);
+  try { speechSynthesis.cancel(); } catch {}
+  youEl.textContent = you ? "You: " + you : "";
+  setMood(m); if (g) doGesture(g);
+  speaking = true; saysEl.textContent = "";
+  return new Promise(resolve => {
+    let i = 0, typed = false, voiced = !$("voiceOn").checked;
+    const done = () => {
+      if (id !== sayId || !typed || !voiced) return;
+      speaking = false;
+      moodTimer = setTimeout(() => { if (id === sayId) setMood("neutral"); }, 2600);
+      resolve();
+    };
+    typeTimer = setInterval(() => {
+      if (id !== sayId) { clearInterval(typeTimer); return; }
+      i += 1; saysEl.textContent = text.slice(0, i);
+      if (i >= text.length) { clearInterval(typeTimer); typed = true; if (voiced) setTimeout(done, 250); else done(); }
+    }, 38);
+    if (!voiced) {
+      try {
+        const u = new SpeechSynthesisUtterance(text);
+        u.pitch = spec.voice?.pitch ?? 1; u.rate = 1.02;
+        u.onend = u.onerror = () => { voiced = true; done(); };
+        speechSynthesis.speak(u);
+        setTimeout(() => { voiced = true; done(); }, text.split(/\s+/).length * 420 + 2500);
+      } catch { voiced = true; }
+    }
+  });
+}
+
+function parseCharacter(input) {
+  const words = input.toLowerCase().replace(/[^a-z\s-]/g, " ").split(/\s+/).filter(Boolean);
+  let key = null, color = null, unknown = null;
+  for (const w of words) {
+    const base = w.replace(/s$/, "");
+    if (PRESETS[w]) key = w; else if (PRESETS[base]) key = base;
+    else if (ALIASES[w]) key = ALIASES[w];
+    else if (COLORS[w]) color = w;
+  }
+  if (!key) {
+    unknown = words.filter(w => !COLORS[w] && !["a","an","the","yourself","make","into","be","become","turn","like","cute","big","little","small"].includes(w)).pop() || "creature";
+  }
+  return { key, color, unknown };
+}
+
+function buildSpec({ key, color, unknown }) {
+  let s;
+  if (key) { s = structuredClone(PRESETS[key]); s.species = key; }
+  else {
+    s = structuredClone(PRESETS.bear); s.species = unknown;
+    s.name = unknown.charAt(0).toUpperCase() + unknown.slice(1);
+    let h = 0; for (const ch of unknown) h = (h*31 + ch.charCodeAt(0)) % 360;
+    const c = hslHex(h, 45, 55);
+    s.head.color = c; s.muzzle = lighten(c, 0.55); s.ears = { type:"pointy", color: darken(c,0.08), inner: lighten(c,0.45) };
+    s.body = { color: c, belly: lighten(c, 0.55) }; s.brows = darken(c, 0.45);
+  }
+  if (color) {
+    const c = COLORS[color];
+    s.head.color = c; s.body.color = c;
+    if (s.ears.color && s.ears.type !== "horns") s.ears.color = darken(c, 0.08);
+    if (s.muzzle) s.muzzle = lighten(c, 0.6);
+    s.body.belly = lighten(c, 0.6);
+    if (s.brows && s.mouthStyle !== "glow") s.brows = darken(c, 0.45);
+    if (s.mane) s.mane = darken(c, 0.25);
+    s.name = color.charAt(0).toUpperCase() + color.slice(1) + " " + s.name;
+  }
+  return s;
+}
+
+function become(input, you) {
+  const parsed = parseCharacter(input);
+  const next = buildSpec(parsed);
+  return new Promise(resolve => {
+    pop = { t:0, swapped:false, apply: () => { spec = next; showSpec(); markPreset(); } };
+    setTimeout(() => {
+      const line = parsed.key
+        ? `Ta-da! I'm ${next.name} the ${parsed.key}. How do I look?`
+        : `I don't have a ${parsed.unknown} design in this prototype, so here's my best guess. In the app, Claude would design one.`;
+      say(line, parsed.key ? "happy" : "concerned", parsed.key ? "bounce" : null, you).then(resolve);
+    }, 560);
+  });
+}
+
+const makeRe = /(?:make yourself|turn (?:yourself )?into|become|change into|transform into|be)\s+(?:an?\s+)?(.+)/i;
+const has = (s, list) => list.some(w => new RegExp("\\b" + w + "\\b", "i").test(s));
+async function respond(text) {
+  const m = text.match(makeRe);
+  if (m) return become(m[1], text);
+  if (has(text, ["lol","haha","hah","joke","funny","lmao"])) return say("Ha! That's a good one.", "laughing", "bounce", text);
+  if (has(text, ["sad","sorry","failed","lost","bad","tired","sick","miss","broke","terrible","awful"])) return say("Oh no, I'm sorry. That sounds hard. Want me to help with anything?", "sad", null, text);
+  if (has(text, ["great","awesome","love","thanks","thank","yay","happy","passed","won","amazing"])) return say("That's great to hear! I'm really happy for you.", "happy", "bounce", text);
+  if (has(text, ["wow","whoa","omg","crazy","no way"])) return say("Whoa, really? Tell me more!", "surprised", null, text);
+  if (/\?\s*$/.test(text) || /^(what|how|why|who|when|where|can|could|should|is|are|do|does|will)\b/i.test(text)) {
+    await say("Hmm, let me think about that...", "thinking", null, text);
+    return say("In the real app, Claude answers this, and I can search the web too. Here I can only react.", "happy", "nod", text);
+  }
+  if (has(text, ["hi","hello","hey","yo"])) return say(`Hi! I'm ${spec.name}. Nice to meet you!`, "happy", "wave", text);
+  return say("Got it. In the real app, Claude writes what I say. Here I'm showing how I'd react.", "neutral", "nod", text);
+}
+
+$("talkForm").addEventListener("submit", e => {
+  e.preventDefault(); const v = $("talkInput").value.trim(); if (!v) return;
+  $("talkInput").value = ""; respond(v);
+});
+$("makeForm").addEventListener("submit", e => {
+  e.preventDefault(); const v = $("makeInput").value.trim(); if (!v) return;
+  $("makeInput").value = ""; become(v, "Make yourself a " + v.replace(/^an?\s+/i, ""));
+});
+
+let demoRun = 0;
+$("demoBtn").addEventListener("click", async () => {
+  const id = ++demoRun;
+  const go = async (fn) => { if (id !== demoRun) throw 0; await fn(); await new Promise(r => setTimeout(r, 700)); };
+  try {
+    if (spec.species !== "lion") await go(() => become("lion", "Make yourself a lion"));
+    await go(() => say("Hi! I'm Leo. Ask me anything, and I'll help however I can.", "happy", "wave"));
+    await go(() => say("Hmm, let me look that up. One second...", "thinking", null, "What's the tallest tree in the world?"));
+    await go(() => say("Found it! A coast redwood named Hyperion. It's about 116 meters tall.", "surprised", null));
+    await go(() => become("fox", "Make yourself a fox"));
+    await go(() => say("Oh no, I'm sorry. That's rough. Want me to set a reminder to book a retake?", "sad", null, "I failed my driving test today."));
+    await go(() => say("Done. I set a reminder for Monday at 9 AM. You've got this!", "happy", "nod", "Yes please"));
+  } catch {}
+});
+
+const presetBox = $("presetChips");
+Object.keys(PRESETS).forEach(k => {
+  const b = document.createElement("button"); b.type = "button"; b.className = "ghost"; b.dataset.k = k;
+  b.textContent = k.charAt(0).toUpperCase() + k.slice(1);
+  b.addEventListener("click", () => become(k, "Make yourself a " + k));
+  presetBox.appendChild(b);
+});
+function markPreset() { presetBox.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.k === spec.species && !/ /.test(spec.name)))); }
+
+const exprBox = $("exprChips");
+Object.keys(EXPR).forEach(m => {
+  const b = document.createElement("button"); b.type = "button"; b.className = "ghost"; b.dataset.m = m;
+  b.textContent = m.charAt(0).toUpperCase() + m.slice(1);
+  b.addEventListener("click", () => { clearTimeout(moodTimer); setMood(m); });
+  exprBox.appendChild(b);
+});
+const gestBox = $("gestChips");
+GESTURES.forEach(g => {
+  const b = document.createElement("button"); b.type = "button"; b.className = "ghost";
+  b.textContent = g.charAt(0).toUpperCase() + g.slice(1);
+  b.addEventListener("click", () => doGesture(g));
+  gestBox.appendChild(b);
+});
+
+showSpec(); markPreset(); setMood("happy");
+saysEl.textContent = "Hi! I'm Leo. Press “Play demo conversation”, or tell me to become something.";
+moodTimer = setTimeout(() => setMood("neutral"), 3000);
+})();
+</script>
