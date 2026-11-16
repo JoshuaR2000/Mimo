@@ -78,3 +78,7 @@ prototypes/   Early browser prototypes of the character designs
 - Home Screen widget
 - Optional server so users don't need their own API key
 - More tests around the OpenAI client and tools (with a mocked network)
+
+## License
+
+MIT. See [LICENSE](LICENSE).
